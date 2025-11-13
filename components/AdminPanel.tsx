@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus } from '../types';
 import ProductList from './ProductList';
 import CategoryDropdown from './CategoryDropdown';
@@ -37,6 +37,7 @@ interface AdminPageProps {
     onDeleteUser: (userId: number) => void;
     onUpdateUserByAdmin: (userId: number, updates: Partial<User> & { newPassword?: string }) => void;
     onCycleBadge: (productId: number) => void;
+    onImportData: (data: { products: Product[], users: User[], orders: Order[] }) => void;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -44,8 +45,9 @@ const packagingDisplayMap: Record<ProductPackaging, string> = { головка: 
 const unitOptions: ProductUnit[] = ['kg', 'g', 'pcs', 'l'];
 const packagingOptions: ProductPackaging[] = ['головка', 'упаковка', 'штука', 'банка', 'ящик'];
 
-const AdminPage: React.FC<AdminPageProps> = ({ products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge }) => {
-    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist'>('pricelist');
+const AdminPage: React.FC<AdminPageProps> = (props) => {
+    const { products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
+    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -83,6 +85,9 @@ const AdminPage: React.FC<AdminPageProps> = ({ products, allCategories, orders, 
     
     // State for USP markups
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
+
+    // Ref for file input
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const adminCategories = useMemo(() => [
         ...new Set(products.map(p => p.categories).flat())
@@ -365,7 +370,62 @@ const AdminPage: React.FC<AdminPageProps> = ({ products, allCategories, orders, 
         reader.readAsArrayBuffer(file);
     };
 
-    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist', children: React.ReactNode}> = ({tabId, children}) => {
+    const handleExport = () => {
+        const dataToExport = {
+            products: products,
+            orders: orders,
+            users: allUsers,
+        };
+        const jsonString = JSON.stringify(dataToExport, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const href = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = href;
+        const date = new Date().toISOString().slice(0, 10);
+        link.download = `opt-hub-backup-${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(href);
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!window.confirm("Вы уверены, что хотите импортировать данные? Это перезапишет ВСЕ текущие товары, заказы и пользователей. Рекомендуется сначала сделать экспорт (резервную копию).")) {
+            if (event.target) event.target.value = ''; // Reset input
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result;
+                if (typeof text !== 'string') throw new Error('Не удалось прочитать файл.');
+                const data = JSON.parse(text);
+
+                // Basic validation
+                if (!data.products || !data.users || !data.orders) {
+                    throw new Error('Неверный формат файла. Отсутствуют необходимые поля: products, users, orders.');
+                }
+                
+                onImportData(data);
+
+            } catch (error: any) {
+                alert(`Ошибка при импорте: ${error.message}`);
+            } finally {
+                if (event.target) event.target.value = ''; // Reset input
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
         return (
             <button
@@ -429,6 +489,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ products, allCategories, orders, 
                     <TabButton tabId="add">Добавить товар</TabButton>
                     <TabButton tabId="import">Импорт Excel</TabButton>
                     <TabButton tabId="importSheets">Импорт Sheets</TabButton>
+                    <TabButton tabId="sync">Экспорт/Импорт</TabButton>
                 </div>
             </div>
 
@@ -779,6 +840,50 @@ const AdminPage: React.FC<AdminPageProps> = ({ products, allCategories, orders, 
                             </button>
                         </div>
                         {importError && <p className="text-red-500 text-sm mt-2">{importError}</p>}
+                    </div>
+                </div>
+            )}
+            
+            {activeTab === 'sync' && (
+                <div className="mt-6 max-w-2xl">
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Экспорт и Импорт данных</h3>
+                    <p className="text-sm text-gray-600 mb-6">
+                        Эта функция позволяет сохранить все данные приложения (товары, заказы, покупатели) в один файл. Этот файл можно использовать для создания резервной копии или для переноса данных на другое устройство, чтобы продолжить работу.
+                    </p>
+        
+                    <div className="space-y-6">
+                        <div className="p-4 border rounded-lg bg-gray-50">
+                            <h4 className="font-semibold text-gray-700">Экспорт данных</h4>
+                            <p className="text-sm text-gray-600 mt-1 mb-3">
+                                Сохранить все текущие данные в файл JSON.
+                            </p>
+                            <button
+                                onClick={handleExport}
+                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            >
+                                Скачать файл с данными
+                            </button>
+                        </div>
+        
+                        <div className="p-4 border rounded-lg bg-gray-50">
+                            <h4 className="font-semibold text-gray-700">Импорт данных</h4>
+                            <p className="text-sm text-gray-600 mt-1 mb-3">
+                                <span className="font-bold text-red-600">Внимание:</span> Загрузка файла перезапишет все существующие данные в приложении. Рекомендуется сначала сделать экспорт для создания резервной копии.
+                            </p>
+                            <button
+                                onClick={handleImportClick}
+                                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                            >
+                                Загрузить файл с данными
+                            </button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                accept=".json,application/json"
+                                className="hidden"
+                            />
+                        </div>
                     </div>
                 </div>
             )}

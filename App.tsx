@@ -725,6 +725,41 @@ const App: React.FC = () => {
     });
   };
 
+  const handleImportData = (data: { products: Product[]; users: User[]; orders: Order[] }) => {
+    try {
+        if (!Array.isArray(data.products) || !Array.isArray(data.users) || !Array.isArray(data.orders)) {
+            throw new Error('Неверный формат данных в файле.');
+        }
+
+        // Apply same migration logic as on initial load to ensure compatibility
+        const migratedUsers = data.users.map(u => ({ ...u, customerType: u.customerType || 'Розничный' }));
+        const migratedOrders = data.orders.map(o => ({ ...o, status: o.status || OrderStatus.New }));
+        const migratedProducts = data.products.map((p: any) => {
+            const { isPromotion, ...rest } = p;
+            return {
+                ...rest,
+                badge: p.badge || (isPromotion ? 'ХИТ' : undefined),
+                priceOverridesPerUnit: p.priceOverridesPerUnit || {},
+                usp1UseGlobalMarkup: p.usp1UseGlobalMarkup !== false,
+                priceTiers: p.priceTiers || {},
+            };
+        });
+
+        // Directly update localStorage
+        localStorage.setItem('products', JSON.stringify(migratedProducts));
+        localStorage.setItem('users', JSON.stringify(migratedUsers));
+        localStorage.setItem('orders', JSON.stringify(migratedOrders));
+        
+        alert('Данные успешно импортированы! Страница будет перезагружена для применения всех изменений.');
+        
+        // Reload the page to re-initialize all state from the new localStorage data
+        window.location.reload();
+
+    } catch (error: any) {
+        alert(`Ошибка импорта: ${error.message}`);
+    }
+  };
+
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans">
@@ -745,18 +780,18 @@ const App: React.FC = () => {
                     )}
                 </button>
                 {cartItems.length > 0 && (
-                     <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 border-l border-gray-200 pl-2 sm:pl-4">
-                        <div>
-                            <div className="text-gray-500">Позиций</div>
-                            <div className="font-semibold">{cartItems.length}</div>
+                     <div className="space-y-0.5 text-xs sm:text-sm text-gray-600 border-l border-gray-200 pl-2 sm:pl-4 min-w-[120px]">
+                        <div className="flex justify-between gap-2">
+                            <span className="text-gray-500">Позиций:</span>
+                            <span className="font-semibold">{cartItems.length}</span>
                         </div>
-                        <div>
-                            <div className="text-gray-500">Вес</div>
-                             <div className="font-semibold">~{totalCartWeight.toFixed(2)} кг</div>
+                        <div className="flex justify-between gap-2">
+                            <span className="text-gray-500">Вес:</span>
+                            <span className="font-semibold">~{totalCartWeight.toFixed(2)} кг</span>
                         </div>
-                         <div>
-                             <div className="text-gray-500">Сумма</div>
-                             <div className="font-semibold">{totalCartSum.toLocaleString('ru-RU')} ₽</div>
+                         <div className="flex justify-between gap-2">
+                             <span className="text-gray-500">Сумма:</span>
+                             <span className="font-semibold">{totalCartSum.toLocaleString('ru-RU')} ₽</span>
                          </div>
                     </div>
                 )}
@@ -817,6 +852,7 @@ const App: React.FC = () => {
                 onDeleteUser={handleDeleteUser}
                 onUpdateUserByAdmin={handleUpdateUserByAdmin}
                 onCycleBadge={handleCycleProductBadge}
+                onImportData={handleImportData}
               />
             </>
           ) : (

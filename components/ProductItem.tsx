@@ -540,7 +540,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                         aria-expanded={isGalleryOpen}
                         aria-controls={`gallery-${product.id}`}
                     >
-                        <img src={product.imageUrls[0]} alt={product.name} className="w-12 h-12 object-cover rounded-md" />
+                        <img src={product.imageUrls[0]} alt={product.name} className="w-12 h-12 object-cover rounded-md" loading="lazy" decoding="async" />
                     </button>
                     
                     {isAdminView ? (
@@ -738,6 +738,8 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                                     alt={`${product.name} photo ${index + 1}`} 
                                     className="h-40 object-cover rounded-lg"
                                     aria-hidden={!isGalleryOpen}
+                                    loading="lazy"
+                                    decoding="async"
                                 />
                              </button>
                              {isAdminView && (

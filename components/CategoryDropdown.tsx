@@ -44,7 +44,7 @@ const CategoryDropdown: React.FC<CategoryDropdownProps> = ({ categories, selecte
   const selectedCategoryLabel = selectedCategory === 'all' ? 'Все категории' : selectedCategory;
 
   const dropdownMenuClasses = "absolute z-10 mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm";
-  const dropdownMenuPosition = displayAsIconButton ? "right-0 w-56" : "w-full";
+  const dropdownMenuPosition = displayAsIconButton ? "left-0 w-56" : "w-full";
 
   return (
     <div className={`relative ${displayAsIconButton ? '' : 'w-full sm:w-64'}`} ref={dropdownRef}>

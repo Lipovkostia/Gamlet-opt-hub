@@ -6,22 +6,22 @@ interface ProductItemProps {
   product: Product;
   onAddToCart: (product: Product, portion: ProductPortion, startRect?: DOMRect) => void;
   isExpanded: boolean;
-  onToggleExpand: (productId: number) => void;
+  onToggleExpand: (productId: string) => void;
   isGalleryOpen: boolean;
-  onToggleGallery: (productId: number) => void;
+  onToggleGallery: (productId: string) => void;
   isAdminView?: boolean;
-  onDeleteProduct?: (productId: number) => void;
-  onCycleStatus?: (productId: number) => void;
-  onUpdatePortions?: (productId: number, portion: ProductPortion) => void;
-  onUpdatePrices?: (productId: number, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
-  onUpdateUnitValue?: (productId: number, newUnitValue: number) => void;
-  onUpdateDetails?: (productId: number, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
-  onUpdateImages?: (productId: number, newImageUrls: string[]) => void;
+  onDeleteProduct?: (productId: string) => void;
+  onCycleStatus?: (productId: string) => void;
+  onUpdatePortions?: (productId: string, portion: ProductPortion) => void;
+  onUpdatePrices?: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
+  onUpdateUnitValue?: (productId: string, newUnitValue: number) => void;
+  onUpdateDetails?: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
+  onUpdateImages?: (productId: string, newImageUrls: string[]) => void;
   onOpenGalleryModal?: (imageUrls: string[], index: number) => void;
   showProductImages?: boolean;
   allCategories?: string[];
-  onUpdateCategories?: (productId: number, newCategories: string[]) => void;
-  onCycleBadge?: (productId: number) => void;
+  onUpdateCategories?: (productId: string, newCategories: string[]) => void;
+  onCycleBadge?: (productId: string) => void;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };

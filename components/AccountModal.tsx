@@ -5,8 +5,8 @@ interface AccountModalProps {
     user: User;
     orders: Order[];
     onClose: () => void;
-    onUpdateDetails: (userId: number, details: { name: string; city: string; address: string; }) => void;
-    onChangePassword: (userId: number, oldPassword: string, newPassword: string) => 'success' | 'wrong_password';
+    onUpdateDetails: (userId: string, details: { name: string; city: string; address: string; }) => void;
+    onChangePassword: (userId: string, oldPassword: string, newPassword: string) => 'success' | 'wrong_password';
 }
 
 const XIcon: React.FC<{className?: string}> = ({className}) => (

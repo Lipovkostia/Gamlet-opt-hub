@@ -8,32 +8,32 @@ interface ProductListProps {
   products: Product[];
   onAddToCart: (product: Product, portion: ProductPortion, startRect?: DOMRect) => void;
   isAdminView?: boolean;
-  onDeleteProduct?: (productId: number) => void;
-  onCycleStatus?: (productId: number) => void;
-  onUpdatePortions?: (productId: number, portion: ProductPortion) => void;
-  onUpdatePrices?: (productId: number, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
-  onUpdateUnitValue?: (productId: number, newUnitValue: number) => void;
-  onUpdateDetails?: (productId: number, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
-  onUpdateImages?: (productId: number, newImageUrls: string[]) => void;
+  onDeleteProduct?: (productId: string) => void;
+  onCycleStatus?: (productId: string) => void;
+  onUpdatePortions?: (productId: string, portion: ProductPortion) => void;
+  onUpdatePrices?: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
+  onUpdateUnitValue?: (productId: string, newUnitValue: number) => void;
+  onUpdateDetails?: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
+  onUpdateImages?: (productId: string, newImageUrls: string[]) => void;
   onOpenGalleryModal?: (imageUrls: string[], index: number) => void;
   showProductImages?: boolean;
   allCategories?: string[];
-  onUpdateCategories?: (productId: number, newCategories: string[]) => void;
-  onCycleBadge?: (productId: number) => void;
+  onUpdateCategories?: (productId: string, newCategories: string[]) => void;
+  onCycleBadge?: (productId: string) => void;
 }
 
 const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, isAdminView = false, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge }) => {
-  const [expandedProductId, setExpandedProductId] = useState<number | null>(null);
-  const [galleryProductId, setGalleryProductId] = useState<number | null>(null);
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [galleryProductId, setGalleryProductId] = useState<string | null>(null);
 
-  const handleToggleExpand = (productId: number) => {
+  const handleToggleExpand = (productId: string) => {
     if (galleryProductId === productId) {
       setGalleryProductId(null); // Закрыть галерею, если открывается описание
     }
     setExpandedProductId(currentId => (currentId === productId ? null : productId));
   };
   
-  const handleToggleGallery = (productId: number) => {
+  const handleToggleGallery = (productId: string) => {
     if (expandedProductId === productId) {
       setExpandedProductId(null); // Закрыть описание, если открывается галерея
     }

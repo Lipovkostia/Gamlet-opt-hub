@@ -3,8 +3,8 @@ import { Product, CustomerType } from '../types';
 
 interface WholesaleProductTableRowProps {
     product: Product;
-    onUpdatePriceTiers: (productId: number, priceTiers: Product['priceTiers']) => void;
-    onUpdateProductCostPrice: (productId: number, newCostPrice?: number) => void;
+    onUpdatePriceTiers: (productId: string, priceTiers: Product['priceTiers']) => void;
+    onUpdateProductCostPrice: (productId: string, newCostPrice?: number) => void;
 }
 
 const wholesaleTiers: Extract<CustomerType, 'оптовый' | 'средний опт' | 'крупный опт'>[] = ['оптовый', 'средний опт', 'крупный опт'];

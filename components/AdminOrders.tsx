@@ -33,7 +33,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ orders, users, onUpdateStatus
         return users.reduce((acc, user) => {
             acc[user.id] = user;
             return acc;
-        }, {} as Record<number, User>);
+        }, {} as Record<string, User>);
     }, [users]);
 
     const sortedOrders = useMemo(() => {
@@ -55,7 +55,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ orders, users, onUpdateStatus
     }, [sortedOrders, searchTerm, userMap]);
 
     const handleToggleExpand = (orderId: string) => {
-        setExpandedOrderId(currentId => (currentId === orderId ? null : orderId));
+        setExpandedOrderId(currentId => (currentId === orderId ? null : currentId));
     };
 
     return (

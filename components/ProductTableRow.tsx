@@ -4,16 +4,16 @@ import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging }
 interface ProductTableRowProps {
     product: Product;
     allCategories: string[];
-    onDeleteProduct: (productId: number) => void;
-    onCycleStatus: (productId: number) => void;
-    onUpdatePortions: (productId: number, portion: ProductPortion) => void;
-    onUpdatePrices: (productId: number, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
-    onUpdateUspPrices: (productId: number, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
-    onUpdateUspMarkupFlags: (productId: number, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
-    onUpdateUnitValue: (productId: number, newUnitValue: number) => void;
-    onUpdateDetails: (productId: number, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
-    onUpdateCategories: (productId: number, newCategories: string[]) => void;
-    onUpdateImages: (productId: number, newImageUrls: string[]) => void;
+    onDeleteProduct: (productId: string) => void;
+    onCycleStatus: (productId: string) => void;
+    onUpdatePortions: (productId: string, portion: ProductPortion) => void;
+    onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
+    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
+    onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
+    onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
+    onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
+    onUpdateCategories: (productId: string, newCategories: string[]) => void;
+    onUpdateImages: (productId: string, newImageUrls: string[]) => void;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };

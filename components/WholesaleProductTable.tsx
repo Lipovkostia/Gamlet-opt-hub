@@ -4,9 +4,9 @@ import WholesaleProductTableRow from './WholesaleProductTableRow';
 
 interface WholesaleProductTableProps {
     products: Product[];
-    onUpdatePriceTiers: (productId: number, priceTiers: Product['priceTiers']) => void;
-    onUpdateProductCostPrice: (productId: number, costPrice?: number) => void;
-    onBulkUpdateWholesalePrices: (updates: { productId: number; newPrice: number; }[]) => void;
+    onUpdatePriceTiers: (productId: string, priceTiers: Product['priceTiers']) => void;
+    onUpdateProductCostPrice: (productId: string, costPrice?: number) => void;
+    onBulkUpdateWholesalePrices: (updates: { productId: string; newPrice: number; }[]) => void;
 }
 
 const WholesaleProductTable: React.FC<WholesaleProductTableProps> = ({ products, onUpdatePriceTiers, onUpdateProductCostPrice, onBulkUpdateWholesalePrices }) => {
@@ -49,7 +49,7 @@ const WholesaleProductTable: React.FC<WholesaleProductTableProps> = ({ products,
                 acc.push({ productId: product.id, newPrice });
             }
             return acc;
-        }, [] as { productId: number; newPrice: number; }[]);
+        }, [] as { productId: string; newPrice: number; }[]);
 
 
         if (updates.length > 0) {

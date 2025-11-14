@@ -16,18 +16,6 @@ const INITIAL_CATEGORIES = [
   'Козьи и овечьи'
 ];
 
-const INITIAL_PRODUCTS: Product[] = [
-  { id: 1, name: 'Пармезан', pricePerUnit: 2500, categories: ['Твердые'], imageUrls: ['https://picsum.photos/id/282/400/300', 'https://picsum.photos/id/283/400/300', 'https://picsum.photos/id/284/400/300'], unitValue: 5.3, unit: 'kg', packaging: 'головка', description: 'Итальянский твердый сыр долгого созревания. Обладает ломкой текстурой и пикантным вкусом.', allowedPortions: ['whole', 'half', 'quarter'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 1800, usp1Price: 2600, usp1UseGlobalMarkup: false },
-  { id: 2, name: 'Гауда', pricePerUnit: 1800, categories: ['Твердые'], imageUrls: ['https://picsum.photos/id/431/400/300', 'https://picsum.photos/id/432/400/300', 'https://picsum.photos/id/433/400/300'], unitValue: 2.1, unit: 'kg', packaging: 'головка', description: 'Популярный голландский сыр с мягким сливочным вкусом. Идеален для бутербродов и закусок.', allowedPortions: ['whole', 'half'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 1200, usp1UseGlobalMarkup: true },
-  { id: 3, name: 'Бри', pricePerUnit: 2200, categories: ['Мягкие'], imageUrls: ['https://picsum.photos/id/435/400/300', 'https://picsum.photos/id/436/400/300', 'https://picsum.photos/id/437/400/300'], unitValue: 1.2, unit: 'kg', packaging: 'головка', description: 'Французский мягкий сыр с корочкой из белой плесени. Имеет нежный грибной аромат.', allowedPortions: ['whole'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 1600, usp1UseGlobalMarkup: true },
-  { id: 4, name: 'Камамбер', pricePerUnit: 480, categories: ['Мягкие'], imageUrls: ['https://picsum.photos/id/312/400/300', 'https://picsum.photos/id/313/400/300', 'https://picsum.photos/id/314/400/300'], unitValue: 1, unit: 'pcs', packaging: 'упаковка', description: 'Знаменитый французский сыр с кремовой текстурой и насыщенным вкусом. Часто запекают целиком.', allowedPortions: ['whole'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 350, usp1UseGlobalMarkup: true, badge: 'ХИТ' },
-  { id: 5, name: 'Рокфор', pricePerUnit: 3500, categories: ['С плесенью', 'Козьи и овечьи'], imageUrls: ['https://picsum.photos/id/1060/400/300', 'https://picsum.photos/id/1061/400/300'], unitValue: 3.5, unit: 'kg', packaging: 'головка', description: 'Овечий сыр с голубой плесенью из Франции. Отличается острым, соленым вкусом и ярким ароматом.', allowedPortions: ['whole', 'half', 'quarter'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 2800, usp1UseGlobalMarkup: true },
-  { id: 6, name: 'Горгонзола', pricePerUnit: 3200, categories: ['С плесенью'], imageUrls: ['https://picsum.photos/id/1080/400/300', 'https://picsum.photos/id/1081/400/300', 'https://picsum.photos/id/1082/400/300'], unitValue: 1.5, unit: 'kg', packaging: 'головка', description: 'Итальянский голубой сыр. Бывает двух видов: сладкий (dolce) и пикантный (piccante).', allowedPortions: ['whole', 'half'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 2500, usp1UseGlobalMarkup: true },
-  { id: 7, name: 'Шевр', pricePerUnit: 560, categories: ['Козьи и овечьи'], imageUrls: ['https://picsum.photos/id/203/400/300', 'https://picsum.photos/id/204/400/300'], unitValue: 1, unit: 'pcs', packaging: 'штука', description: 'Французский козий сыр с характерной кислинкой и нежной, творожистой текстурой.', allowedPortions: ['whole'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 400, usp1UseGlobalMarkup: true },
-  { id: 8, name: 'Фета', pricePerUnit: 300, categories: ['Козьи и овечьи'], imageUrls: ['https://picsum.photos/id/375/400/300', 'https://picsum.photos/id/376/400/300', 'https://picsum.photos/id/377/400/300'], unitValue: 200, unit: 'g', packaging: 'упаковка', description: 'Греческий рассольный сыр из овечьего молока. Незаменимый ингредиент греческого салата.', allowedPortions: ['whole'], status: ProductStatus.Available, priceOverridesPerUnit: {}, costPrice: 200, usp1UseGlobalMarkup: true },
-];
-
-
 const TruckIcon: React.FC<{ className?: string; itemCount?: number }> = ({ className, itemCount = 0 }) => {
     const MAX_BOXES = 15; // 5 columns, 3 rows
     const colors = ['#FBBF24', '#34D399', '#60A5FA', '#F87171', '#A78BFA'];
@@ -167,49 +155,10 @@ const simpleHash = (str: string) => {
 
 
 const App: React.FC = () => {
-  const [products, setProducts] = useState<Product[]>(() => {
-    const savedProducts = localStorage.getItem('products');
-    if (savedProducts) {
-        let parsed = JSON.parse(savedProducts);
-        // Migration for users with old data structures
-        if (parsed.length > 0 && (parsed[0].hasOwnProperty('isVisible') || parsed[0].hasOwnProperty('pricePerKg'))) {
-            return parsed.map((p: any) => {
-                const { isPromotion, ...rest } = p;
-                return {
-                    id: p.id,
-                    name: p.name,
-                    pricePerUnit: p.pricePerUnit || p.pricePerKg || 0,
-                    categories: p.categories || (p.category ? [p.category] : []),
-                    imageUrls: p.imageUrls || [],
-                    unitValue: p.unitValue || p.weight || 1,
-                    unit: p.unit || 'kg',
-                    packaging: p.packaging || 'головка',
-                    description: p.description || '',
-                    allowedPortions: p.allowedPortions || ['whole'],
-                    status: p.hasOwnProperty('isVisible') ? (p.isVisible ? ProductStatus.Available : ProductStatus.Hidden) : (p.status || ProductStatus.Available),
-                    priceOverridesPerUnit: p.priceOverridesPerUnit || p.priceOverridesPerKg || p.portionPrices || {},
-                    costPrice: p.costPrice,
-                    usp1Price: p.usp1Price,
-                    usp1UseGlobalMarkup: p.usp1UseGlobalMarkup !== false,
-                    badge: p.badge || (isPromotion ? 'ХИТ' : undefined),
-                    priceTiers: p.priceTiers || {},
-                };
-            });
-        }
-         // ensure new structure exists on clean data
-        return parsed.map((p: any) => {
-          const { isPromotion, ...rest } = p;
-          return {
-            ...rest, 
-            badge: p.badge || (isPromotion ? 'ХИТ' : undefined),
-            priceOverridesPerUnit: p.priceOverridesPerUnit || {},
-            usp1UseGlobalMarkup: p.usp1UseGlobalMarkup !== false,
-            priceTiers: p.priceTiers || {},
-          }
-        });
-    }
-    return INITIAL_PRODUCTS.map(p => ({...p, priceTiers: p.priceTiers || {} }));
-  });
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  
   const [selectedCategory, setSelectedCategory] = useState<string | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -221,11 +170,7 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [galleryModalInfo, setGalleryModalInfo] = useState<{images: string[], index: number} | null>(null);
-  const [allCategories, setAllCategories] = useState<string[]>(() => {
-      const uniqueCategories = new Set(INITIAL_CATEGORIES);
-      products.forEach(p => p.categories.forEach(c => uniqueCategories.add(c)));
-      return Array.from(uniqueCategories).sort();
-  });
+  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [flyingItems, setFlyingItems] = useState<{ id: number; imageUrl: string; startRect: DOMRect }[]>([]);
   const [showProductImages, setShowProductImages] = useState(true);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
@@ -235,8 +180,30 @@ const App: React.FC = () => {
   const { currentUser, logout, updateUserDetails, changePassword } = useContext(AuthContext);
   
   useEffect(() => {
-    localStorage.setItem('products', JSON.stringify(products));
-  }, [products]);
+    const fetchProducts = async () => {
+      try {
+        setIsLoading(true);
+        setError('');
+        const response = await fetch('/api/products');
+        if (!response.ok) {
+          throw new Error('Failed to fetch products');
+        }
+        const data: Product[] = await response.json();
+        setProducts(data);
+
+        // Update categories based on fetched products
+        const uniqueCategories = new Set(INITIAL_CATEGORIES);
+        data.forEach(p => p.categories.forEach(c => uniqueCategories.add(c)));
+        setAllCategories(Array.from(uniqueCategories).sort());
+
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
 
   useEffect(() => {
     // If user is not an admin, force shop view
@@ -457,207 +424,161 @@ const App: React.FC = () => {
     });
   };
 
-  const handleAddNewProduct = (newProductData: Omit<Product, 'id' | 'status'>) => {
-    setProducts(prevProducts => {
-        const newProduct: Product = {
-            ...newProductData,
-            id: Date.now(), // Simple ID generation
-            status: ProductStatus.Available,
-        };
-        return [...prevProducts, newProduct];
-    });
-    updateGlobalCategories(newProductData.categories);
+  const handleProductUpdate = async (productId: string, update: Partial<Product>) => {
+    try {
+      const response = await fetch('/api/products', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: productId, update }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update product');
+      }
+      setProducts(prevProducts =>
+        prevProducts.map(p => (p.id === productId ? { ...p, ...update } : p))
+      );
+    } catch (err) {
+      console.error("Update failed:", err);
+      // Optionally show an error to the user
+    }
+  };
+
+  const handleAddNewProduct = async (newProductData: Omit<Product, 'id' | 'status'>) => {
+    try {
+        const response = await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productData: newProductData }),
+        });
+        if (!response.ok) throw new Error('Failed to add product');
+        const newProduct = await response.json();
+        setProducts(prevProducts => [...prevProducts, newProduct]);
+        updateGlobalCategories(newProductData.categories);
+    } catch (err) {
+        console.error("Add failed:", err);
+    }
   };
   
-  const handleBulkAddProducts = (newProductsData: Omit<Product, 'id' | 'status'>[]) => {
-    const newProducts: Product[] = newProductsData.map((p, i) => ({
-        ...p,
-        id: Date.now() + i, // Simple unique ID generation for bulk import
-        status: ProductStatus.Available,
-    }));
-
-    setProducts(prevProducts => [...prevProducts, ...newProducts]);
-
-    const allNewCategories = newProductsData.flatMap(p => p.categories);
-    updateGlobalCategories(allNewCategories);
+  const handleBulkAddProducts = async (newProductsData: Omit<Product, 'id' | 'status'>[]) => {
+    try {
+        const response = await fetch('/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productsData: newProductsData }),
+        });
+        if (!response.ok) throw new Error('Failed to bulk add products');
+        const newProducts = await response.json();
+        setProducts(prevProducts => [...prevProducts, ...newProducts]);
+        const allNewCategories = newProductsData.flatMap(p => p.categories);
+        updateGlobalCategories(allNewCategories);
+    } catch (err) {
+        console.error("Bulk add failed:", err);
+    }
   };
 
-  const handleDeleteProduct = (productId: number) => {
+  const handleDeleteProduct = async (productId: string) => {
     const productToDelete = products.find(p => p.id === productId);
     if (!productToDelete) return; 
 
     const isConfirmed = window.confirm(`Точно хотите удалить товар "${productToDelete.name}"? Это действие необратимо.`);
     if (isConfirmed) {
-        setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+        try {
+            const response = await fetch('/api/products', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: productId }),
+            });
+            if (!response.ok) throw new Error('Failed to delete product');
+            setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
+        } catch (err) {
+            console.error("Delete failed:", err);
+        }
     }
   };
 
-  const handleCycleProductStatus = (productId: number) => {
-    setProducts(prevProducts =>
-      prevProducts.map(p => {
-        if (p.id === productId) {
-          let newStatus: ProductStatus;
-          switch (p.status) {
-            case ProductStatus.Available:
-              newStatus = ProductStatus.OutOfStock;
-              break;
-            case ProductStatus.OutOfStock:
-              newStatus = ProductStatus.Hidden;
-              break;
-            case ProductStatus.Hidden:
-              newStatus = ProductStatus.Available;
-              break;
-            default:
-              newStatus = p.status;
-          }
-          return { ...p, status: newStatus };
+  const handleCycleProductStatus = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    let newStatus: ProductStatus;
+    switch (product.status) {
+        case ProductStatus.Available: newStatus = ProductStatus.OutOfStock; break;
+        case ProductStatus.OutOfStock: newStatus = ProductStatus.Hidden; break;
+        case ProductStatus.Hidden: newStatus = ProductStatus.Available; break;
+        default: newStatus = product.status;
+    }
+    handleProductUpdate(productId, { status: newStatus });
+  };
+
+  const handleUpdateProductPortions = (productId: string, portion: ProductPortion) => {
+    const product = products.find(p => p.id === productId);
+    if (!product || portion === 'whole') return;
+    const newPortions = product.allowedPortions.includes(portion)
+      ? product.allowedPortions.filter(item => item !== portion)
+      : [...product.allowedPortions, portion];
+    handleProductUpdate(productId, { allowedPortions: newPortions });
+  };
+  
+  const handleUpdateProductPrices = (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => {
+    handleProductUpdate(productId, newPrices);
+  };
+
+  const handleUpdateProductPriceTiers = (productId: string, newPriceTiers: Product['priceTiers']) => {
+    handleProductUpdate(productId, { priceTiers: newPriceTiers });
+  };
+
+  const handleUpdateProductCostPrice = (productId: string, newCostPrice?: number) => {
+    handleProductUpdate(productId, { costPrice: newCostPrice });
+  };
+
+  const handleUpdateProductUspPrices = (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => {
+    handleProductUpdate(productId, newUspPrices);
+  };
+  
+  const handleBulkUpdateUspPrices = (updates: { productId: string; usp1Price?: number; }[]) => {
+    updates.forEach(update => {
+        handleProductUpdate(update.productId, { usp1Price: update.usp1Price });
+    });
+  };
+
+  const handleBulkUpdateWholesalePrices = (updates: { productId: string; newPrice: number; }[]) => {
+     updates.forEach(update => {
+        const product = products.find(p => p.id === update.productId);
+        if(product) {
+            const newPriceTiers = { ...(product.priceTiers || {}), 'оптовый': update.newPrice };
+            handleProductUpdate(update.productId, { priceTiers: newPriceTiers });
         }
-        return p;
-      })
-    );
+    });
   };
 
-  const handleUpdateProductPortions = (productId: number, portion: ProductPortion) => {
-    setProducts(prevProducts =>
-      prevProducts.map(p => {
-        if (p.id === productId) {
-          // 'whole' is always required and cannot be toggled off.
-          if (portion === 'whole') return p; 
+  const handleUpdateProductUspMarkupFlags = (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => {
+    handleProductUpdate(productId, flags);
+  };
 
-          const newPortions = p.allowedPortions.includes(portion)
-            ? p.allowedPortions.filter(item => item !== portion)
-            : [...p.allowedPortions, portion];
-          
-          return { ...p, allowedPortions: newPortions };
-        }
-        return p;
-      })
-    );
+  const handleUpdateProductUnitValue = (productId: string, newUnitValue: number) => {
+    handleProductUpdate(productId, { unitValue: newUnitValue });
+  };
+
+  const handleUpdateProductDetails = (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging }) => {
+    handleProductUpdate(productId, newDetails);
+  };
+
+  const handleUpdateProductImages = (productId: string, newImageUrls: string[]) => {
+    handleProductUpdate(productId, { imageUrls: newImageUrls });
   };
   
-  const handleUpdateProductPrices = (productId: number, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => {
-    setProducts(prevProducts =>
-        prevProducts.map(p => {
-            if (p.id === productId) {
-                return {
-                    ...p,
-                    pricePerUnit: newPrices.pricePerUnit,
-                    priceOverridesPerUnit: newPrices.priceOverridesPerUnit,
-                };
-            }
-            return p;
-        })
-    );
-  };
-
-  const handleUpdateProductPriceTiers = (productId: number, newPriceTiers: Product['priceTiers']) => {
-    setProducts(prevProducts =>
-        prevProducts.map(p => {
-            if (p.id === productId) {
-                return { ...p, priceTiers: newPriceTiers };
-            }
-            return p;
-        })
-    );
-  };
-
-  const handleUpdateProductCostPrice = (productId: number, newCostPrice?: number) => {
-    setProducts(prevProducts =>
-        prevProducts.map(p =>
-            p.id === productId ? { ...p, costPrice: newCostPrice } : p
-        )
-    );
-  };
-
-  const handleUpdateProductUspPrices = (productId: number, newUspPrices: { costPrice?: number; usp1Price?: number; }) => {
-    setProducts(prevProducts =>
-        prevProducts.map(p =>
-            p.id === productId ? { ...p, ...newUspPrices } : p
-        )
-    );
-  };
-  
-  const handleBulkUpdateUspPrices = (updates: { productId: number; usp1Price?: number; }[]) => {
-    const updateMap = new Map(updates.map(u => [u.productId, u]));
-    setProducts(prevProducts =>
-        prevProducts.map(p => {
-            const update = updateMap.get(p.id);
-            if (update) {
-                return { ...p, ...update };
-            }
-            return p;
-        })
-    );
-  };
-
-  const handleBulkUpdateWholesalePrices = (updates: { productId: number; newPrice: number; }[]) => {
-    const updateMap = new Map(updates.map(u => [u.productId, u.newPrice]));
-    setProducts(prevProducts =>
-        prevProducts.map(p => {
-            if (updateMap.has(p.id)) {
-                const newPrice = updateMap.get(p.id)!;
-                const newPriceTiers = { ...(p.priceTiers || {}), 'оптовый': newPrice };
-                return { ...p, priceTiers: newPriceTiers };
-            }
-            return p;
-        })
-    );
-  };
-
-  const handleUpdateProductUspMarkupFlags = (productId: number, flags: { usp1UseGlobalMarkup?: boolean; }) => {
-    setProducts(prevProducts =>
-        prevProducts.map(p =>
-            p.id === productId ? { ...p, ...flags } : p
-        )
-    );
-  };
-
-  const handleUpdateProductUnitValue = (productId: number, newUnitValue: number) => {
-    setProducts(prevProducts =>
-        prevProducts.map(p =>
-            p.id === productId ? { ...p, unitValue: newUnitValue } : p
-        )
-    );
-  };
-
-  const handleUpdateProductDetails = (productId: number, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging }) => {
-    setProducts(prevProducts =>
-      prevProducts.map(p =>
-        p.id === productId ? { ...p, ...newDetails } : p
-      )
-    );
-  };
-
-  const handleUpdateProductImages = (productId: number, newImageUrls: string[]) => {
-    setProducts(prevProducts =>
-      prevProducts.map(p =>
-        p.id === productId ? { ...p, imageUrls: newImageUrls } : p
-      )
-    );
-  };
-  
-  const handleUpdateProductCategories = (productId: number, newCategories: string[]) => {
-    setProducts(prevProducts =>
-      prevProducts.map(p =>
-        p.id === productId ? { ...p, categories: newCategories } : p
-      )
-    );
+  const handleUpdateProductCategories = (productId: string, newCategories: string[]) => {
+    handleProductUpdate(productId, { categories: newCategories });
     updateGlobalCategories(newCategories);
   };
 
   const badgeCycle: (ProductBadge | undefined)[] = [undefined, 'ХИТ', 'акция', 'мало', 'много'];
 
-  const handleCycleProductBadge = (productId: number) => {
-    setProducts(prevProducts =>
-      prevProducts.map(p => {
-        if (p.id === productId) {
-          const currentBadgeIndex = badgeCycle.findIndex(b => b === p.badge);
-          const nextBadgeIndex = (currentBadgeIndex + 1) % badgeCycle.length;
-          return { ...p, badge: badgeCycle[nextBadgeIndex] };
-        }
-        return p;
-      })
-    );
+  const handleCycleProductBadge = (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const currentBadgeIndex = badgeCycle.findIndex(b => b === product.badge);
+    const nextBadgeIndex = (currentBadgeIndex + 1) % badgeCycle.length;
+    handleProductUpdate(productId, { badge: badgeCycle[nextBadgeIndex] });
   };
 
   const handleOpenGalleryModal = (images: string[], index: number) => {
@@ -677,7 +598,7 @@ const App: React.FC = () => {
       return 'exists';
     }
     const newUser: User = {
-      id: Date.now(),
+      id: Date.now().toString(),
       email,
       passwordHash: simpleHash(password),
       isAdmin: false,
@@ -689,7 +610,7 @@ const App: React.FC = () => {
     return 'success';
   };
 
-  const handleDeleteUser = (userId: number) => {
+  const handleDeleteUser = (userId: string) => {
     const userToDelete = allUsers.find(u => u.id === userId);
     if (!userToDelete) return;
 
@@ -706,7 +627,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateUserByAdmin = (userId: number, updates: Partial<User> & { newPassword?: string }) => {
+  const handleUpdateUserByAdmin = (userId: string, updates: Partial<User> & { newPassword?: string }) => {
     const { newPassword, ...otherUpdates } = updates;
     
     setAllUsers(prevUsers => {
@@ -726,33 +647,26 @@ const App: React.FC = () => {
   };
 
   const handleImportData = (data: { products: Product[]; users: User[]; orders: Order[] }) => {
-    try {
+    // This function will now be for localStorage data, but we can adapt it later if needed.
+    // For now, let's assume it imports localStorage data and reloads.
+     try {
         if (!Array.isArray(data.products) || !Array.isArray(data.users) || !Array.isArray(data.orders)) {
             throw new Error('Неверный формат данных в файле.');
         }
 
-        // Apply same migration logic as on initial load to ensure compatibility
         const migratedUsers = data.users.map(u => ({ ...u, customerType: u.customerType || 'Розничный' }));
         const migratedOrders = data.orders.map(o => ({ ...o, status: o.status || OrderStatus.New }));
-        const migratedProducts = data.products.map((p: any) => {
-            const { isPromotion, ...rest } = p;
-            return {
-                ...rest,
-                badge: p.badge || (isPromotion ? 'ХИТ' : undefined),
-                priceOverridesPerUnit: p.priceOverridesPerUnit || {},
-                usp1UseGlobalMarkup: p.usp1UseGlobalMarkup !== false,
-                priceTiers: p.priceTiers || {},
-            };
-        });
-
-        // Directly update localStorage
-        localStorage.setItem('products', JSON.stringify(migratedProducts));
+        
+        // Save users and orders to localStorage
         localStorage.setItem('users', JSON.stringify(migratedUsers));
         localStorage.setItem('orders', JSON.stringify(migratedOrders));
         
+        // Instead of saving products to localStorage, we post them to the server
+        const productsToImport = data.products.map(({ id, ...p}) => p); // Remove old IDs
+        handleBulkAddProducts(productsToImport as Omit<Product, 'id' | 'status'>[]);
+        
         alert('Данные успешно импортированы! Страница будет перезагружена для применения всех изменений.');
         
-        // Reload the page to re-initialize all state from the new localStorage data
         window.location.reload();
 
     } catch (error: any) {
@@ -909,12 +823,16 @@ const App: React.FC = () => {
                     )}
                 </div>
               </div>
-              <ProductList 
-                products={filteredProducts} 
-                onAddToCart={handleAddToCart}
-                onOpenGalleryModal={handleOpenGalleryModal}
-                showProductImages={showProductImages}
-              />
+              {isLoading && <p className="text-center text-gray-500">Загрузка товаров...</p>}
+              {error && <p className="text-center text-red-500">Ошибка: {error}</p>}
+              {!isLoading && !error && (
+                <ProductList 
+                  products={filteredProducts} 
+                  onAddToCart={handleAddToCart}
+                  onOpenGalleryModal={handleOpenGalleryModal}
+                  showProductImages={showProductImages}
+                />
+              )}
             </>
           )}
       </main>

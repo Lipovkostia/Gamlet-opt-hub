@@ -18,7 +18,7 @@ export type CustomerType = 'Розничный' | 'постоянный' | 'оп
 
 
 export interface Product {
-  id: number;
+  id: string;
   name: string;
   pricePerUnit: number;
   categories: string[];
@@ -46,7 +46,7 @@ export interface Product {
 
 export interface CartItem {
   cartId: string; // Unique identifier for the group, e.g. '1-half'
-  id: number; // product id
+  id: string; // product id
   name: string;
   imageUrl: string;
   unit: ProductUnit;
@@ -58,7 +58,7 @@ export interface CartItem {
 
 // For Authentication
 export interface User {
-  id: number;
+  id: string;
   email: string;
   passwordHash: string; // In a real app, never store plain text passwords
   isAdmin?: boolean;
@@ -70,7 +70,7 @@ export interface User {
 
 // For Order History
 export interface OrderItem {
-  productId: number;
+  productId: string;
   name: string;
   quantity: number; // amount in unit
   price: number;
@@ -78,7 +78,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  userId: number;
+  userId: string;
   date: string;
   items: OrderItem[];
   totalAmount: number;

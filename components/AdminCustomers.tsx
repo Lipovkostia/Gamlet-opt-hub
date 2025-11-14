@@ -5,8 +5,8 @@ interface AdminCustomersProps {
     users: User[];
     orders: Order[];
     onAddUser: (email: string, password: string) => 'success' | 'exists';
-    onDeleteUser: (userId: number) => void;
-    onUpdateUserByAdmin: (userId: number, updates: Partial<User> & { newPassword?: string }) => void;
+    onDeleteUser: (userId: string) => void;
+    onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
 }
 
 const customerTypes: CustomerType[] = ['Розничный', 'постоянный', 'оптовый', 'крупный опт', 'средний опт'];
@@ -79,7 +79,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUse
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+    const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
     const handleAddUser = (e: React.FormEvent) => {
         e.preventDefault();
@@ -119,14 +119,14 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUse
         return orders.reduce((acc, order) => {
             acc[order.userId] = (acc[order.userId] || 0) + 1;
             return acc;
-        }, {} as Record<number, number>);
+        }, {} as Record<string, number>);
     }, [orders]);
 
-    const handleCustomerTypeChange = (userId: number, customerType: CustomerType) => {
+    const handleCustomerTypeChange = (userId: string, customerType: CustomerType) => {
         onUpdateUserByAdmin(userId, { customerType });
     };
 
-    const handleSaveUserDetails = (userId: number, updates: Partial<User> & { newPassword?: string }) => {
+    const handleSaveUserDetails = (userId: string, updates: Partial<User> & { newPassword?: string }) => {
         onUpdateUserByAdmin(userId, updates);
         setExpandedUserId(null); // Close editor on save
     };

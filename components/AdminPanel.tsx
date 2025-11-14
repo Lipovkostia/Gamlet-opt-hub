@@ -18,25 +18,25 @@ interface AdminPageProps {
     allUsers: User[];
     onAddProduct: (product: Omit<Product, 'id' | 'status'>) => void;
     onBulkAddProducts: (products: Omit<Product, 'id' | 'status'>[]) => void;
-    onDeleteProduct: (productId: number) => void;
-    onCycleStatus: (productId: number) => void;
-    onUpdatePortions: (productId: number, portion: ProductPortion) => void;
-    onUpdatePrices: (productId: number, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
-    onUpdateProductPriceTiers: (productId: number, priceTiers: Product['priceTiers']) => void;
-    onUpdateProductCostPrice: (productId: number, costPrice?: number) => void;
-    onUpdateUspPrices: (productId: number, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
-    onBulkUpdateUspPrices: (updates: { productId: number; usp1Price?: number; }[]) => void;
-    onBulkUpdateWholesalePrices: (updates: { productId: number; newPrice: number; }[]) => void;
-    onUpdateUspMarkupFlags: (productId: number, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
-    onUpdateUnitValue: (productId: number, newUnitValue: number) => void;
-    onUpdateDetails: (productId: number, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
-    onUpdateImages: (productId: number, newImageUrls: string[]) => void;
-    onUpdateCategories: (productId: number, newCategories: string[]) => void;
+    onDeleteProduct: (productId: string) => void;
+    onCycleStatus: (productId: string) => void;
+    onUpdatePortions: (productId: string, portion: ProductPortion) => void;
+    onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
+    onUpdateProductPriceTiers: (productId: string, priceTiers: Product['priceTiers']) => void;
+    onUpdateProductCostPrice: (productId: string, costPrice?: number) => void;
+    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
+    onBulkUpdateUspPrices: (updates: { productId: string; usp1Price?: number; }[]) => void;
+    onBulkUpdateWholesalePrices: (updates: { productId: string; newPrice: number; }[]) => void;
+    onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
+    onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
+    onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
+    onUpdateImages: (productId: string, newImageUrls: string[]) => void;
+    onUpdateCategories: (productId: string, newCategories: string[]) => void;
     onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
     onAddUser: (email: string, password: string) => 'success' | 'exists';
-    onDeleteUser: (userId: number) => void;
-    onUpdateUserByAdmin: (userId: number, updates: Partial<User> & { newPassword?: string }) => void;
-    onCycleBadge: (productId: number) => void;
+    onDeleteUser: (userId: string) => void;
+    onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
+    onCycleBadge: (productId: string) => void;
     onImportData: (data: { products: Product[], users: User[], orders: Order[] }) => void;
 }
 
@@ -132,12 +132,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
 
     const handleApplyMarkups = () => {
-        const updates: { productId: number; usp1Price?: number; }[] = [];
+        const updates: { productId: string; usp1Price?: number; }[] = [];
         const markup1 = parseFloat(uspMarkups.usp1);
 
         filteredTableProducts.forEach(product => {
             if (product.costPrice && product.costPrice > 0) {
-                const newPrices: { productId: number; usp1Price?: number; } = { productId: product.id };
+                const newPrices: { productId: string; usp1Price?: number; } = { productId: product.id };
                 
                 if (product.usp1UseGlobalMarkup !== false && !isNaN(markup1)) {
                     newPrices.usp1Price = Math.round(product.costPrice * (1 + markup1 / 100));
@@ -296,9 +296,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 const workbook = XLSX.read(data, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-                // FIX: Removed the <any> generic type argument from sheet_to_json.
-                // The XLSX variable is declared as `any`, so its methods are untyped
-                // and cannot be called with type arguments.
                 const rawJson = XLSX.utils.sheet_to_json(worksheet);
                 
                 const productsToAdd: Omit<Product, 'id' | 'status'>[] = [];

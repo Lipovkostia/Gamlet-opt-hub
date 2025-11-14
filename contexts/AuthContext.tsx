@@ -18,8 +18,8 @@ interface AuthContextType {
   login: (email: string, password: string) => 'success' | 'not_found' | 'wrong_password';
   register: (email: string, password: string) => 'success' | 'exists';
   logout: () => void;
-  updateUserDetails: (userId: number, details: { name: string; city: string; address: string; }) => void;
-  changePassword: (userId: number, oldPassword: string, newPassword: string) => 'success' | 'wrong_password';
+  updateUserDetails: (userId: string, details: { name: string; city: string; address: string; }) => void;
+  changePassword: (userId: string, oldPassword: string, newPassword: string) => 'success' | 'wrong_password';
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (!adminExists) {
         const adminUser: User = {
-            id: Date.now(),
+            id: Date.now().toString(),
             email: adminLogin,
             passwordHash: simpleHash('1'),
             isAdmin: true,
@@ -91,7 +91,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return 'exists';
     }
     const newUser: User = {
-      id: Date.now(),
+      id: Date.now().toString(),
       email,
       passwordHash: simpleHash(password),
       isAdmin: false, // Regular users are not admins
@@ -112,7 +112,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     sessionStorage.removeItem('currentUser');
   };
   
-  const updateUserDetails = (userId: number, details: { name: string; city: string; address: string; }) => {
+  const updateUserDetails = (userId: string, details: { name: string; city: string; address: string; }) => {
     const updatedUsers = users.map(u => {
         if (u.id === userId) {
             return { ...u, ...details };
@@ -129,7 +129,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const changePassword = (userId: number, oldPassword: string, newPassword: string): 'success' | 'wrong_password' => {
+  const changePassword = (userId: string, oldPassword: string, newPassword: string): 'success' | 'wrong_password' => {
     const user = users.find(u => u.id === userId);
     if (!user || user.passwordHash !== simpleHash(oldPassword)) {
         return 'wrong_password';

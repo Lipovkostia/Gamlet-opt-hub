@@ -19,6 +19,7 @@ interface AdminPageProps {
     allCategories: string[];
     orders: Order[];
     allUsers: User[];
+    roles: string[];
     onAddProduct: (product: Omit<Product, 'id' | 'status'>) => Promise<void>;
     onBulkAddProducts: (products: Omit<Product, 'id' | 'status'>[]) => void;
     onDeleteProduct: (productId: string) => void;
@@ -42,6 +43,8 @@ interface AdminPageProps {
     onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
     onCycleBadge: (productId: string) => void;
     onImportData: (data: { products: Product[], users: User[], orders: Order[] }) => void;
+    onAddRole: (role: string) => void;
+    onDeleteRole: (role: string) => void;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -75,7 +78,7 @@ const CopyIcon: React.FC<{className?: string}> = ({className}) => (
 );
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { shopId, products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
+    const { shopId, products, allCategories, orders, allUsers, roles, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole } = props;
     const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
@@ -865,6 +868,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         uspMarkups={uspMarkups}
                         setUspMarkups={setUspMarkups}
                         onApplyMarkups={handleApplyMarkups}
+                        roles={roles}
                     />
                 </div>
             )}
@@ -880,6 +884,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onUpdatePriceTiers={onUpdateProductPriceTiers}
                         onUpdateProductCostPrice={onUpdateProductCostPrice}
                         onBulkUpdateWholesalePrices={onBulkUpdateWholesalePrices}
+                        roles={roles}
                     />
                 </div>
             )}
@@ -893,6 +898,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     <VisibilityMatrix
                         products={products}
                         onUpdateVisibility={onUpdateVisibility}
+                        roles={roles}
                     />
                 </div>
             )}
@@ -916,6 +922,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onAddUser={onAddUser}
                         onDeleteUser={onDeleteUser}
                         onUpdateUserByAdmin={onUpdateUserByAdmin}
+                        roles={roles}
+                        onAddRole={onAddRole}
+                        onDeleteRole={onDeleteRole}
                     />
                 </div>
             )}

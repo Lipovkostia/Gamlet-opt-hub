@@ -15,7 +15,7 @@ export type ProductPortion = 'whole' | 'half' | 'quarter';
 export type ProductUnit = 'kg' | 'g' | 'pcs' | 'l';
 export type ProductPackaging = 'головка' | 'упаковка' | 'штука' | 'банка' | 'ящик';
 export type ProductBadge = 'ХИТ' | 'акция' | 'мало' | 'много';
-export type CustomerType = 'Розничный' | 'постоянный' | 'оптовый' | 'крупный опт' | 'средний опт';
+export type CustomerType = string;
 
 export const ALL_CUSTOMER_TYPES: CustomerType[] = ['Розничный', 'постоянный', 'оптовый', 'крупный опт', 'средний опт'];
 
@@ -24,6 +24,7 @@ export interface Shop {
     name: string;
     ownerEmail: string;
     createdAt: string;
+    roles?: string[];
 }
 
 export interface Product {
@@ -46,11 +47,7 @@ export interface Product {
   costPrice?: number;
   usp1Price?: number;
   usp1UseGlobalMarkup?: boolean;
-  priceTiers?: {
-    'оптовый'?: number;
-    'средний опт'?: number;
-    'крупный опт'?: number;
-  };
+  priceTiers?: Record<string, number>; // Dynamic keys for roles
   visibleToRoles?: CustomerType[]; // If undefined or empty, visible to all
 }
 

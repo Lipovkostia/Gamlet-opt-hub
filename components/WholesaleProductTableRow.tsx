@@ -1,15 +1,15 @@
+
 import React, { useState, useEffect } from 'react';
-import { Product, CustomerType } from '../types';
+import { Product } from '../types';
 
 interface WholesaleProductTableRowProps {
     product: Product;
     onUpdatePriceTiers: (productId: string, priceTiers: Product['priceTiers']) => void;
     onUpdateProductCostPrice: (productId: string, newCostPrice?: number) => void;
+    wholesaleRoles: string[];
 }
 
-const wholesaleTiers: Extract<CustomerType, 'оптовый' | 'средний опт' | 'крупный опт'>[] = ['оптовый', 'средний опт', 'крупный опт'];
-
-const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ product, onUpdatePriceTiers, onUpdateProductCostPrice }) => {
+const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ product, onUpdatePriceTiers, onUpdateProductCostPrice, wholesaleRoles }) => {
     const [editedTiers, setEditedTiers] = useState(product.priceTiers || {});
     const [editedCostPrice, setEditedCostPrice] = useState<string>(product.costPrice?.toString() ?? '');
     const [isDirty, setIsDirty] = useState(false);
@@ -20,7 +20,7 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
         setIsDirty(false);
     }, [product]);
 
-    const handlePriceChange = (tier: CustomerType, value: string) => {
+    const handlePriceChange = (tier: string, value: string) => {
         const numValue = value === '' ? undefined : parseFloat(value);
         setEditedTiers(prev => {
             const newTiers = { ...prev, [tier]: numValue };
@@ -65,7 +65,7 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
                     placeholder="-"
                 />
             </td>
-            {wholesaleTiers.map(tier => (
+            {wholesaleRoles.map(tier => (
                  <td key={tier} className="py-2 px-2">
                     <input 
                         type="number" 

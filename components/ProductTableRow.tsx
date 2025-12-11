@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, CustomerType, ALL_CUSTOMER_TYPES } from '../types';
+import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, CustomerType } from '../types';
 
 interface ProductTableRowProps {
     product: Product;
@@ -16,6 +16,7 @@ interface ProductTableRowProps {
     onUpdateCategories: (productId: string, newCategories: string[]) => void;
     onUpdateImages: (productId: string, newImageUrls: string[]) => void;
     onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
+    roles?: string[]; // Optional to support legacy/default behavior if not passed
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -61,7 +62,7 @@ const MoreIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages, onUpdateVisibility }) => {
+const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages, onUpdateVisibility, roles = [] }) => {
     const [editedProduct, setEditedProduct] = useState(product);
     const [newCategory, setNewCategory] = useState('');
     const [isDirty, setIsDirty] = useState(false);
@@ -183,11 +184,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
 
     const handleRoleToggle = (role: CustomerType) => {
         const currentRoles = editedProduct.visibleToRoles || [];
-        // If currentRoles is empty, it means visible to ALL.
-        // If we toggle one, we need to handle logic carefully.
-        // Logic: if empty/undefined, clicking one means we want to restrict to JUST that one (or toggle it off? no, toggle it on).
-        // Actually simpler: Treat empty as "All selected visually" or just empty array in state.
-        // Let's assume state tracks restriction. Empty = No restriction.
         
         let newRoles: CustomerType[];
         if (currentRoles.includes(role)) {
@@ -476,7 +472,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                             <label className="block text-xs font-medium text-gray-700 mb-2">Отображать для:</label>
                             <div className="space-y-1 max-h-48 overflow-y-auto">
                                 <div className="text-xs text-gray-500 mb-2 italic">Если ничего не выбрано — видно всем.</div>
-                                {ALL_CUSTOMER_TYPES.map(role => (
+                                {roles.map(role => (
                                     <div key={role} className="flex items-center">
                                         <input 
                                             id={`role-${product.id}-${role}`} 

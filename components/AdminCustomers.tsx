@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, Order, CustomerType, ALL_CUSTOMER_TYPES } from '../types';
+import { User, Order, CustomerType } from '../types';
 
 interface AdminCustomersProps {
     shopId: string;
@@ -9,9 +9,10 @@ interface AdminCustomersProps {
     onAddUser: (email: string, password: string) => 'success' | 'exists';
     onDeleteUser: (userId: string) => void;
     onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
+    roles: string[];
+    onAddRole: (role: string) => void;
+    onDeleteRole: (role: string) => void;
 }
-
-const customerTypes = ALL_CUSTOMER_TYPES;
 
 const TrashIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -32,17 +33,19 @@ const LinkIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
-const UserEditor: React.FC<{ user: User; onSave: (updates: Partial<User> & { newPassword?: string }) => void; onCancel: () => void; }> = ({ user, onSave, onCancel }) => {
+const UserEditor: React.FC<{ user: User; roles: string[]; onSave: (updates: Partial<User> & { newPassword?: string }) => void; onCancel: () => void; }> = ({ user, roles, onSave, onCancel }) => {
     const [name, setName] = useState(user.name || '');
     const [city, setCity] = useState(user.city || '');
     const [address, setAddress] = useState(user.address || '');
     const [newPassword, setNewPassword] = useState('');
+    const [customerType, setCustomerType] = useState(user.customerType || 'Розничный');
 
     const handleSave = () => {
         const updates: Partial<User> & { newPassword?: string } = {
             name: name.trim(),
             city: city.trim(),
             address: address.trim(),
+            customerType: customerType,
         };
         if (newPassword) {
             updates.newPassword = newPassword;
@@ -53,10 +56,20 @@ const UserEditor: React.FC<{ user: User; onSave: (updates: Partial<User> & { new
     return (
         <div className="p-4 bg-gray-100 space-y-4">
             <h4 className="font-semibold text-gray-700">Редактировать: {user.email}</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Имя</label>
                     <input type="text" value={name} onChange={e => setName(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
+                </div>
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Тип покупателя</label>
+                    <select 
+                        value={customerType} 
+                        onChange={(e) => setCustomerType(e.target.value)}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                        {roles.map(role => <option key={role} value={role}>{role}</option>)}
+                    </select>
                 </div>
                  <div>
                     <label className="block text-sm font-medium text-gray-700">Город</label>
@@ -81,7 +94,7 @@ const UserEditor: React.FC<{ user: User; onSave: (updates: Partial<User> & { new
 };
 
 
-const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, onAddUser, onDeleteUser, onUpdateUserByAdmin }) => {
+const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, onAddUser, onDeleteUser, onUpdateUserByAdmin, roles, onAddRole, onDeleteRole }) => {
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -89,6 +102,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
     const [generatedLink, setGeneratedLink] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+    const [newRoleName, setNewRoleName] = useState('');
 
     const handleAddUser = (e: React.FormEvent) => {
         e.preventDefault();
@@ -119,6 +133,14 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
             setError(`Пользователь с логином ${login} уже существует.`);
         }
     };
+
+    const handleCreateRole = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newRoleName.trim()) {
+            onAddRole(newRoleName.trim());
+            setNewRoleName('');
+        }
+    }
 
     const customers = useMemo(() => {
         const customerUsers = users.filter(u => !u.isAdmin);
@@ -164,66 +186,108 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
         <div className="space-y-8">
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Manual Add User Form */}
-                <div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Ручное добавление покупателя</h3>
-                    <form onSubmit={handleAddUser} className="p-4 border rounded-lg bg-gray-50 space-y-4">
-                        {error && <p className="text-red-500 text-sm">{error}</p>}
-                        {success && <p className="text-green-600 text-sm">{success}</p>}
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label htmlFor="login-add" className="block text-sm font-medium text-gray-700">Логин</label>
-                                <input
-                                    type="text"
-                                    id="login-add"
-                                    value={login}
-                                    onChange={(e) => setLogin(e.target.value)}
-                                    placeholder="Введите логин"
-                                    required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                />
+                {/* Manual Add User Form & Role Management */}
+                <div className="space-y-8">
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Ручное добавление покупателя</h3>
+                        <form onSubmit={handleAddUser} className="p-4 border rounded-lg bg-gray-50 space-y-4">
+                            {error && <p className="text-red-500 text-sm">{error}</p>}
+                            {success && <p className="text-green-600 text-sm">{success}</p>}
+                            <div className="grid grid-cols-1 gap-4">
+                                <div>
+                                    <label htmlFor="login-add" className="block text-sm font-medium text-gray-700">Логин</label>
+                                    <input
+                                        type="text"
+                                        id="login-add"
+                                        value={login}
+                                        onChange={(e) => setLogin(e.target.value)}
+                                        placeholder="Введите логин"
+                                        required
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <label htmlFor="password-add"className="block text-sm font-medium text-gray-700">Пароль</label>
+                                    <input
+                                        type="password"
+                                        id="password-add"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <label htmlFor="password-add"className="block text-sm font-medium text-gray-700">Пароль</label>
-                                <input
-                                    type="password"
-                                    id="password-add"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                />
-                            </div>
-                        </div>
-                         <div className="flex justify-end">
-                            <button
-                                type="submit"
-                                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                            >
-                                Добавить
-                            </button>
-                        </div>
-                    </form>
-
-                    {generatedLink && (
-                        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-sm font-bold text-green-800 mb-2">Ссылка для входа:</p>
-                            <div className="flex gap-2">
-                                <input 
-                                    readOnly 
-                                    value={generatedLink} 
-                                    className="text-xs w-full p-2 border border-green-300 rounded bg-white text-gray-700 font-mono"
-                                    onClick={(e) => (e.target as HTMLInputElement).select()}
-                                />
-                                <button 
-                                    onClick={() => copyToClipboard(generatedLink)}
-                                    className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 whitespace-nowrap"
+                             <div className="flex justify-end">
+                                <button
+                                    type="submit"
+                                    className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                 >
-                                    Копировать
+                                    Добавить
                                 </button>
                             </div>
+                        </form>
+
+                        {generatedLink && (
+                            <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <p className="text-sm font-bold text-green-800 mb-2">Ссылка для входа:</p>
+                                <div className="flex gap-2">
+                                    <input 
+                                        readOnly 
+                                        value={generatedLink} 
+                                        className="text-xs w-full p-2 border border-green-300 rounded bg-white text-gray-700 font-mono"
+                                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                                    />
+                                    <button 
+                                        onClick={() => copyToClipboard(generatedLink)}
+                                        className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 whitespace-nowrap"
+                                    >
+                                        Копировать
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4">Управление ролями</h3>
+                        <div className="p-4 border rounded-lg bg-white space-y-4">
+                            <form onSubmit={handleCreateRole} className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={newRoleName}
+                                    onChange={(e) => setNewRoleName(e.target.value)}
+                                    placeholder="Название новой роли"
+                                    className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                />
+                                <button 
+                                    type="submit"
+                                    disabled={!newRoleName.trim()}
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                    Создать
+                                </button>
+                            </form>
+                            <div className="flex flex-wrap gap-2">
+                                {roles.map(role => (
+                                    <div key={role} className="flex items-center bg-gray-100 rounded-full px-3 py-1 text-sm text-gray-800 border border-gray-200">
+                                        <span>{role}</span>
+                                        {role !== 'Розничный' && (
+                                            <button 
+                                                onClick={() => {
+                                                    if(window.confirm(`Удалить роль "${role}"?`)) onDeleteRole(role);
+                                                }}
+                                                className="ml-2 text-gray-400 hover:text-red-500 focus:outline-none"
+                                                title="Удалить роль"
+                                            >
+                                                &times;
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    )}
+                    </div>
                 </div>
 
                 {/* Self-Registration Links */}
@@ -235,13 +299,13 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
                                 Отправьте эти ссылки клиентам. При регистрации по ним, клиенту автоматически будет присвоен выбранный тип цен.
                             </p>
                         </div>
-                        <div className="divide-y divide-gray-200">
-                            {customerTypes.map(type => {
+                        <div className="divide-y divide-gray-200 max-h-[500px] overflow-y-auto">
+                            {roles.map(type => {
                                 const link = generateRegistrationLink(type);
                                 return (
                                     <div key={type} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
                                         <div className="flex items-center gap-2">
-                                            <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-indigo-100 text-indigo-600">
+                                            <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-indigo-100 text-indigo-600 flex-shrink-0">
                                                 <LinkIcon className="h-5 w-5" />
                                             </span>
                                             <div>
@@ -306,7 +370,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
                                                 onChange={(e) => handleCustomerTypeChange(user.id, e.target.value as CustomerType)}
                                                 className="block w-full px-2 py-1.5 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                             >
-                                                {customerTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                                                {roles.map(type => <option key={type} value={type}>{type}</option>)}
                                             </select>
                                         </td>
                                         <td className="py-4 px-6 text-center">{ordersByUser[user.id] || 0}</td>
@@ -329,6 +393,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
                                             <td colSpan={5} className="p-0">
                                                 <UserEditor 
                                                     user={user} 
+                                                    roles={roles}
                                                     onSave={(updates) => handleSaveUserDetails(user.id, updates)}
                                                     onCancel={() => setExpandedUserId(null)}
                                                 />

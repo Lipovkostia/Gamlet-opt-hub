@@ -523,7 +523,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
     };
 
 
-  const itemClasses = `px-3 py-[3px] transition-colors duration-150 flex flex-col ${product.status === ProductStatus.Hidden && isAdminView ? 'bg-gray-100 opacity-60' : 'hover:bg-gray-50'}`
+  const itemClasses = `px-2 sm:px-3 py-[3px] transition-colors duration-150 flex flex-col ${product.status === ProductStatus.Hidden && isAdminView ? 'bg-gray-100 opacity-60' : 'hover:bg-gray-50'}`
 
   const customerButtonClasses = "flex items-center gap-1.5 text-center px-2 py-1.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200";
 
@@ -577,7 +577,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
 
   return (
     <div className={itemClasses}>
-        <div className="flex gap-4">
+        <div className="flex gap-2 sm:gap-4">
             {showProductImages && (
                 <div className="flex-shrink-0 mt-1 self-start">
                     <button 

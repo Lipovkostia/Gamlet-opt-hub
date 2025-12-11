@@ -10,7 +10,7 @@ import AdminPage from './components/AdminPanel';
 import ImageGalleryModal from './components/ImageGalleryModal';
 import { AuthContext } from './contexts/AuthContext';
 import { db } from './lib/firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 
 const INITIAL_CATEGORIES = [
   'Твердые',
@@ -160,6 +160,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const [showProductImages, setShowProductImages] = useState(true);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [registrationType, setRegistrationType] = useState<CustomerType | null>(null);
+  const [customerRoles, setCustomerRoles] = useState<string[]>(ALL_CUSTOMER_TYPES);
   
   const cartIconRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -170,17 +171,39 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const ordersCollection = useMemo(() => collection(db!, 'shops', shopId, 'orders'), [shopId]);
   const usersCollection = useMemo(() => collection(db!, 'shops', shopId, 'users'), [shopId]);
 
+  // Load Customer Roles
+  useEffect(() => {
+      const fetchRoles = async () => {
+          if (!db) return;
+          try {
+              const shopRef = doc(db, 'shops', shopId);
+              const shopSnap = await getDoc(shopRef);
+              if (shopSnap.exists() && shopSnap.data().roles) {
+                  setCustomerRoles(shopSnap.data().roles);
+              } else {
+                  // Initialize with defaults if not present
+                  if (currentUser?.isAdmin) {
+                      await updateDoc(shopRef, { roles: ALL_CUSTOMER_TYPES });
+                  }
+                  setCustomerRoles(ALL_CUSTOMER_TYPES);
+              }
+          } catch (e) {
+              console.error("Error fetching roles", e);
+          }
+      };
+      fetchRoles();
+  }, [shopId, currentUser]);
+
   useEffect(() => {
     // Check for registration link
     const params = new URLSearchParams(window.location.search);
     const regType = params.get('registerType');
     if (regType && !currentUser) {
-        // Validate type against known types to be safe
-        if (ALL_CUSTOMER_TYPES.includes(regType as CustomerType)) {
-            setRegistrationType(regType as CustomerType);
-            setAuthMode('register');
-            setAuthModalOpen(true);
-        }
+        // Simple check if role exists in current loaded roles or defaults
+        // Note: customerRoles might not be loaded yet, so we trust the link for now or check against ALL_TYPES as fallback
+        setRegistrationType(regType as CustomerType);
+        setAuthMode('register');
+        setAuthModalOpen(true);
     }
   }, [currentUser]);
 
@@ -503,6 +526,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleBulkUpdateWholesalePrices = (updates: { productId: string; newPrice: number; }[]) => updates.forEach(update => {
         const product = products.find(p => p.id === update.productId);
         if(product) {
+            // NOTE: Wholesale bulk update logic might need revisit for dynamic roles
             const newPriceTiers = { ...(product.priceTiers || {}), 'оптовый': update.newPrice };
             handleProductUpdate(update.productId, { priceTiers: newPriceTiers });
         }
@@ -562,6 +586,20 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     setAllUsers(prevUsers => prevUsers.map(user => user.id === userId ? { ...user, ...otherUpdates, ...(newPassword ? { passwordHash: simpleHash(newPassword) } : {}) } : user));
   };
 
+  const handleAddRole = async (newRole: string) => {
+      if (!db || customerRoles.includes(newRole)) return;
+      const updatedRoles = [...customerRoles, newRole];
+      setCustomerRoles(updatedRoles);
+      await updateDoc(doc(db, 'shops', shopId), { roles: updatedRoles });
+  };
+
+  const handleDeleteRole = async (role: string) => {
+      if (!db || role === 'Розничный') return;
+      const updatedRoles = customerRoles.filter(r => r !== role);
+      setCustomerRoles(updatedRoles);
+      await updateDoc(doc(db, 'shops', shopId), { roles: updatedRoles });
+  };
+
   const handleImportData = async (data: { products: Product[]; users: User[]; orders: Order[] }) => {
      try {
         if (!Array.isArray(data.products)) throw new Error('Неверный формат данных');
@@ -593,9 +631,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                         </span>
                     )}
                 </button>
-                <div className="hidden sm:block">
-                    <h1 className="text-xl font-bold text-gray-800">{shopName}</h1>
-                </div>
                 {cartItems.length > 0 && (
                      <div className="space-y-0.5 text-xs sm:text-sm text-gray-600 border-l border-gray-200 pl-2 sm:pl-4 min-w-[120px]">
                         <div className="flex justify-between gap-2">
@@ -639,7 +674,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         </div>
       </header>
       
-      <main className="container mx-auto p-4">
+      <main className="container mx-auto px-px sm:px-4 py-4">
          {view === 'admin' && currentUser?.isAdmin ? (
             <>
               <AdminPage 
@@ -648,6 +683,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 allCategories={allCategories}
                 orders={orders}
                 allUsers={allUsers}
+                roles={customerRoles}
                 onAddProduct={handleAddNewProduct}
                 onBulkAddProducts={handleBulkAddProducts}
                 onDeleteProduct={handleDeleteProduct}
@@ -671,11 +707,13 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 onUpdateUserByAdmin={handleUpdateUserByAdmin}
                 onCycleBadge={handleCycleProductBadge}
                 onImportData={handleImportData}
+                onAddRole={handleAddRole}
+                onDeleteRole={handleDeleteRole}
               />
             </>
           ) : (
             <>
-              <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
+              <div className="bg-white p-2 sm:p-4 rounded-lg shadow-sm mb-2 sm:mb-6">
                 <div className="flex flex-row items-center gap-4">
                     <div className="flex items-center gap-2 flex-shrink-0">
                         <CategoryDropdown

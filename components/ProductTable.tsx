@@ -21,9 +21,10 @@ interface ProductTableProps {
     uspMarkups: { usp1: string; };
     setUspMarkups: React.Dispatch<React.SetStateAction<{ usp1: string; }>>;
     onApplyMarkups: () => void;
+    roles?: string[];
 }
 
-const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, ...propsForRow }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, ...propsForRow }) => {
     return (
         <div className="overflow-x-auto relative shadow-md sm:rounded-lg">
             <table className="w-full text-sm text-left text-gray-500">
@@ -50,6 +51,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                         <ProductTableRow 
                             key={product.id}
                             product={product}
+                            roles={roles}
                             {...propsForRow}
                         />
                     ))}

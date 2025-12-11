@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo } from 'react';
-import { Product, CustomerType, ALL_CUSTOMER_TYPES, ProductStatus } from '../types';
+import { Product, CustomerType, ProductStatus } from '../types';
 
 interface VisibilityMatrixProps {
     products: Product[];
     onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
+    roles: string[];
 }
 
-const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateVisibility }) => {
+const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateVisibility, roles }) => {
     const [searchTerm, setSearchTerm] = useState('');
 
     const filteredProducts = useMemo(() => {
@@ -27,9 +28,9 @@ const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateV
     const handleToggle = (product: Product, role: CustomerType) => {
         let currentRoles: CustomerType[];
 
-        // If currently visible to all (empty array), implicit list is ALL_CUSTOMER_TYPES
+        // If currently visible to all (empty array), implicit list is ALL roles
         if (!product.visibleToRoles || product.visibleToRoles.length === 0) {
-            currentRoles = [...ALL_CUSTOMER_TYPES];
+            currentRoles = [...roles];
         } else {
             currentRoles = [...product.visibleToRoles];
         }
@@ -44,11 +45,7 @@ const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateV
         }
 
         // Optimization: If all roles are selected, save as empty array (visible to all)
-        // Also if array is empty (user unchecked everything), conceptually we might want to hide from all,
-        // but current logic implies empty = all. 
-        // To avoid confusion: If user wants to hide from ALL, they should use Status: Hidden.
-        // Here, if they check everything, we reset to [].
-        const isAllSelected = ALL_CUSTOMER_TYPES.every(t => newRoles.includes(t));
+        const isAllSelected = roles.every(t => newRoles.includes(t));
         
         if (isAllSelected) {
             onUpdateVisibility(product.id, []);
@@ -58,12 +55,7 @@ const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateV
     };
 
     const handleToggleRow = (product: Product) => {
-        // Toggle between "Visible to All" and "Visible to None (in matrix context)"
-        // Note: As per logic, empty array = all. So to hide from all via roles is tricky without a 'none' flag.
-        // Let's implement: If fully visible -> restrict to none (empty set logic issue).
-        // Let's implement: "Reset to All" vs "Select Retail Only" logic is confusing.
-        // Simple logic: If currently mostly visible, clear all (except logic says empty=all).
-        // Let's make the row button "Reset to All" (Check all).
+        // Reset to All (Check all/Clear restriction)
         onUpdateVisibility(product.id, []);
     };
 
@@ -84,7 +76,7 @@ const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateV
                     <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10">
                         <tr>
                             <th className="px-4 py-3 bg-gray-100 min-w-[200px]">Товар</th>
-                            {ALL_CUSTOMER_TYPES.map(role => (
+                            {roles.map(role => (
                                 <th key={role} className="px-4 py-3 text-center bg-gray-100 min-w-[100px]">
                                     {role}
                                 </th>
@@ -103,7 +95,7 @@ const VisibilityMatrix: React.FC<VisibilityMatrixProps> = ({ products, onUpdateV
                                         )}
                                     </div>
                                 </td>
-                                {ALL_CUSTOMER_TYPES.map(role => {
+                                {roles.map(role => {
                                     const isChecked = isVisibleForRole(product, role);
                                     return (
                                         <td key={role} className="px-4 py-3 text-center">

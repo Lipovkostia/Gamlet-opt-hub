@@ -20,29 +20,39 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode, pred
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     const { login, register } = useContext(AuthContext);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (mode === 'login') {
-            const result = login(email, password);
-            if (result === 'success') {
-                onClose();
-            } else if (result === 'not_found') {
-                setError('Пользователь с таким логином не найден.');
+        setIsLoading(true);
+        
+        try {
+            if (mode === 'login') {
+                const result = await login(email, password);
+                if (result === 'success') {
+                    onClose();
+                } else if (result === 'not_found') {
+                    setError('Пользователь с таким логином не найден.');
+                } else {
+                    setError('Неверный пароль.');
+                }
             } else {
-                setError('Неверный пароль.');
+                // Pass predefinedCustomerType if exists, otherwise default is used inside context
+                const result = await register(email, password, predefinedCustomerType || undefined);
+                if (result === 'success') {
+                    onClose();
+                } else {
+                    setError('Пользователь с таким логином уже существует.');
+                }
             }
-        } else {
-            // Pass predefinedCustomerType if exists, otherwise default is used inside context
-            const result = register(email, password, predefinedCustomerType || undefined);
-            if (result === 'success') {
-                onClose();
-            } else {
-                setError('Пользователь с таким логином уже существует.');
-            }
+        } catch (err) {
+            console.error(err);
+            setError('Произошла ошибка. Попробуйте еще раз.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -90,9 +100,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode, pred
                     </div>
                     <button
                         type="submit"
-                        className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        disabled={isLoading}
+                        className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                     >
-                        {mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
+                        {isLoading ? 'Загрузка...' : (mode === 'login' ? 'Войти' : 'Зарегистрироваться')}
                     </button>
                     {!predefinedCustomerType && (
                         <p className="text-sm text-center text-gray-600">

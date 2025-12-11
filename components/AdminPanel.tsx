@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus, CustomerType } from '../types';
+import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus, CustomerType, Badge } from '../types';
 import ProductList from './ProductList';
 import CategoryDropdown from './CategoryDropdown';
 import ProductTable from './ProductTable';
@@ -20,6 +20,7 @@ interface AdminPageProps {
     orders: Order[];
     allUsers: User[];
     roles: string[];
+    badges: Badge[];
     onAddProduct: (product: Omit<Product, 'id' | 'status'>) => Promise<void>;
     onBulkAddProducts: (products: Omit<Product, 'id' | 'status'>[]) => void;
     onDeleteProduct: (productId: string) => void;
@@ -45,12 +46,21 @@ interface AdminPageProps {
     onImportData: (data: { products: Product[], users: User[], orders: Order[] }) => void;
     onAddRole: (role: string) => void;
     onDeleteRole: (role: string) => void;
+    onAddBadge: (text: string, color: string) => void;
+    onDeleteBadge: (badgeId: string) => void;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
 const packagingDisplayMap: Record<ProductPackaging, string> = { головка: 'головка', упаковка: 'упаковка', штука: 'штука', банка: 'банка', ящик: 'ящик' };
 const unitOptions: ProductUnit[] = ['kg', 'g', 'pcs', 'l'];
 const packagingOptions: ProductPackaging[] = ['головка', 'упаковка', 'штука', 'банка', 'ящик'];
+
+const BADGE_COLORS = [
+    'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-yellow-500', 'bg-lime-500',
+    'bg-green-500', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-sky-500',
+    'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500',
+    'bg-pink-500', 'bg-rose-500', 'bg-gray-800'
+];
 
 const CameraIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -84,8 +94,8 @@ const UsersIcon: React.FC<{className?: string}> = ({ className }) => (
 );
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { shopId, products, allCategories, orders, allUsers, roles, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole } = props;
-    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'sync'>('pricelist');
+    const { shopId, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge } = props;
+    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -101,6 +111,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [newCategory, setNewCategory] = useState('');
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Badge state
+    const [badgeText, setBadgeText] = useState('');
+    const [badgeColor, setBadgeColor] = useState('bg-red-500');
 
     // State for Google Sheets import
     const [sheetUrl, setSheetUrl] = useState('');
@@ -304,6 +318,15 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleCreateBadge = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (badgeText.length > 5) return;
+        if (!badgeText.trim()) return;
+        
+        onAddBadge(badgeText.trim(), badgeColor);
+        setBadgeText('');
     };
 
     // Helper to compress images before upload (client-side resize)
@@ -639,7 +662,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         reader.readAsText(file);
     };
 
-    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
+    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
         return (
             <button
@@ -742,15 +765,16 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             <div className="border-b">
                  <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto pb-2 sm:pb-4 px-2 sm:-mx-6 sm:px-6" role="tablist" aria-orientation="horizontal">
                     <TabButton tabId="pricelist">Каталог</TabButton>
-                    <TabButton tabId="table">Прайс лист таблицей</TabButton>
-                    <TabButton tabId="wholesale_pricelist">Оптовый прайс</TabButton>
-                    <TabButton tabId="visibility">Настройка видимости</TabButton>
+                    <TabButton tabId="table">Прайс лист</TabButton>
+                    <TabButton tabId="badges">Метки</TabButton>
+                    <TabButton tabId="wholesale_pricelist">Опт</TabButton>
+                    <TabButton tabId="visibility">Видимость</TabButton>
                     <TabButton tabId="orders">Заказы</TabButton>
                     <TabButton tabId="customers">Покупатели</TabButton>
-                    <TabButton tabId="add">Добавить товар</TabButton>
-                    <TabButton tabId="import">Импорт Excel</TabButton>
-                    <TabButton tabId="importSheets">Импорт Sheets</TabButton>
-                    <TabButton tabId="sync">Экспорт/Импорт</TabButton>
+                    <TabButton tabId="add">Добавить</TabButton>
+                    <TabButton tabId="import">Excel</TabButton>
+                    <TabButton tabId="importSheets">Sheets</TabButton>
+                    <TabButton tabId="sync">Sync</TabButton>
                 </div>
             </div>
 
@@ -844,6 +868,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         allCategories={allCategories}
                         onUpdateCategories={onUpdateCategories}
                         onCycleBadge={onCycleBadge}
+                        badges={badges}
                      />
                 </div>
             )}
@@ -947,6 +972,76 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onApplyMarkups={handleApplyMarkups}
                         roles={roles}
                     />
+                </div>
+            )}
+
+            {activeTab === 'badges' && (
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
+                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Управление метками товаров</h3>
+                    <p className="text-sm text-gray-600 mb-6">
+                        Создавайте метки, которые будут отображаться поверх фотографий товаров (например, "ХИТ", "NEW", "-15%").
+                    </p>
+
+                    <div className="bg-white border rounded-lg p-4 mb-6">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Создать новую метку</h4>
+                        <form onSubmit={handleCreateBadge} className="flex flex-col gap-4">
+                            <div>
+                                <label htmlFor="badgeText" className="block text-xs font-medium text-gray-500 mb-1">Текст (макс. 5)</label>
+                                <input
+                                    type="text"
+                                    id="badgeText"
+                                    maxLength={5}
+                                    value={badgeText}
+                                    onChange={(e) => setBadgeText(e.target.value)}
+                                    placeholder="ХИТ"
+                                    className="block w-40 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-2">Цвет фона</label>
+                                <div className="flex flex-wrap gap-2 max-w-md">
+                                    {BADGE_COLORS.map((color) => (
+                                        <button
+                                            key={color}
+                                            type="button"
+                                            onClick={() => setBadgeColor(color)}
+                                            className={`w-8 h-8 rounded-full ${color} ${badgeColor === color ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'hover:scale-105'} shadow-sm border border-black/10 transition-transform`}
+                                            aria-label={`Select color ${color}`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <button
+                                    type="submit"
+                                    disabled={!badgeText}
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                    Создать
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                        {badges.map(badge => (
+                            <div key={badge.id} className="relative bg-white border rounded-lg p-4 flex flex-col items-center justify-center gap-2 group">
+                                <div className={`px-3 py-1 rounded text-white text-xs font-bold uppercase ${badge.color}`}>
+                                    {badge.text}
+                                </div>
+                                <span className="text-xs text-gray-400">{badge.color.replace('bg-', '').replace('-500', '')}</span>
+                                <button 
+                                    onClick={() => { if(window.confirm('Удалить метку?')) onDeleteBadge(badge.id) }}
+                                    className="absolute top-1 right-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <TrashIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    {badges.length === 0 && (
+                        <p className="text-center text-gray-500 py-8">Меток пока нет.</p>
+                    )}
                 </div>
             )}
 

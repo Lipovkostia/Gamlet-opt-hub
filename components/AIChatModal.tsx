@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Product, ProductPortion, CartItem } from '../types';
@@ -98,35 +99,34 @@ const AIChatModal: React.FC<AIChatModalProps> = ({ products, onClose, onAddToCar
                 required: ["responseText", "items"]
             };
 
-            const model = ai.models.getGenerativeModel({
+            const result = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                systemInstruction: `You are a helpful grocery shopping assistant. 
-                Here is the product catalog JSON: ${JSON.stringify(catalogContext)}.
-                
-                Your goal is to interpret the user's request and match it to products in the catalog.
-                
-                Rules:
-                1. If the user asks for a product, find the best match by ID.
-                2. Calculate quantities carefully. 
-                   - If user says "500g", and unit is 'kg', quantity is 0.5.
-                   - If user says "2 heads", quantity is 2.
-                3. Respect 'allowedPortions'. If a product only allows 'whole', do not suggest 'half'.
-                4. Do not hallucinate products. Only use IDs from the provided catalog.
-                5. If the request is unclear, just ask for clarification in 'responseText' and leave 'items' empty.
-                6. Respond in Russian.`
-            });
-
-            const result = await model.generateContent({
                 contents: [
                     { role: 'user', parts: [{ text: input }] }
                 ],
                 config: {
+                    systemInstruction: `You are a helpful grocery shopping assistant. 
+                    Here is the product catalog JSON: ${JSON.stringify(catalogContext)}.
+                    
+                    Your goal is to interpret the user's request and match it to products in the catalog.
+                    
+                    Rules:
+                    1. If the user asks for a product, find the best match by ID.
+                    2. Calculate quantities carefully. 
+                       - If user says "500g", and unit is 'kg', quantity is 0.5.
+                       - If user says "2 heads", quantity is 2.
+                    3. Respect 'allowedPortions'. If a product only allows 'whole', do not suggest 'half'.
+                    4. Do not hallucinate products. Only use IDs from the provided catalog.
+                    5. If the request is unclear, just ask for clarification in 'responseText' and leave 'items' empty.
+                    6. Respond in Russian.`,
                     responseMimeType: "application/json",
                     responseSchema: responseSchema
                 }
             });
 
-            const responseData = JSON.parse(result.response.text());
+            // Use .text property directly, do not call it as a function
+            const responseText = result.response.text || "{}";
+            const responseData = JSON.parse(responseText);
             
             // Enrich items with names for display
             const proposedItems: AICartItemProposal[] = (responseData.items || []).map((item: any) => {

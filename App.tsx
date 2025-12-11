@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
-import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES } from './types';
+import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES, Badge } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
 import ProductList from './components/ProductList';
 import Cart from './components/Cart';
@@ -177,45 +177,52 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const [showProductImages, setShowProductImages] = useState(true);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [customerRoles, setCustomerRoles] = useState<string[]>(ALL_CUSTOMER_TYPES);
+  const [badges, setBadges] = useState<Badge[]>([]);
   
   const cartIconRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { currentUser, logout, updateUserDetails, changePassword } = useContext(AuthContext);
   
-  // Scoped collections
-  const productsCollection = useMemo(() => collection(db!, 'shops', shopId, 'products'), [shopId]);
-  const ordersCollection = useMemo(() => collection(db!, 'shops', shopId, 'orders'), [shopId]);
-  const usersCollection = useMemo(() => collection(db!, 'shops', shopId, 'users'), [shopId]);
+  // Scoped collections with safety check for null db
+  const productsCollection = useMemo(() => db ? collection(db, 'shops', shopId, 'products') : null, [shopId]);
+  const ordersCollection = useMemo(() => db ? collection(db, 'shops', shopId, 'orders') : null, [shopId]);
+  const usersCollection = useMemo(() => db ? collection(db, 'shops', shopId, 'users') : null, [shopId]);
+  const badgesCollection = useMemo(() => db ? collection(db, 'shops', shopId, 'badges') : null, [shopId]);
 
-  // Load Customer Roles
+  // Load Customer Roles and Badges
   useEffect(() => {
-      const fetchRoles = async () => {
-          if (!db) return;
+      const fetchShopData = async () => {
+          if (!db || !badgesCollection) return;
           try {
               const shopRef = doc(db, 'shops', shopId);
               const shopSnap = await getDoc(shopRef);
               if (shopSnap.exists() && shopSnap.data().roles) {
                   setCustomerRoles(shopSnap.data().roles);
               } else {
-                  // Initialize with defaults if not present
                   if (currentUser?.isAdmin) {
                       await updateDoc(shopRef, { roles: ALL_CUSTOMER_TYPES });
                   }
                   setCustomerRoles(ALL_CUSTOMER_TYPES);
               }
+
+              // Fetch Badges
+              const badgesSnap = await getDocs(badgesCollection);
+              const loadedBadges = badgesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Badge));
+              setBadges(loadedBadges);
+
           } catch (e) {
-              console.error("Error fetching roles", e);
+              console.error("Error fetching shop data/roles/badges", e);
           }
       };
-      fetchRoles();
-  }, [shopId, currentUser]);
+      fetchShopData();
+  }, [shopId, currentUser, badgesCollection]);
 
   useEffect(() => {
     const fetchProducts = async () => {
       setIsLoading(true);
       setError('');
       try {
-        if (db) {
+        if (db && productsCollection) {
             const querySnapshot = await getDocs(productsCollection);
             const data: Product[] = querySnapshot.docs.map(doc => ({
                 ...(doc.data() as Omit<Product, 'id'>),
@@ -247,7 +254,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   useEffect(() => {
       // Load orders and users if admin
       const fetchAdminData = async () => {
-          if (currentUser?.isAdmin && db) {
+          if (currentUser?.isAdmin && db && ordersCollection && usersCollection) {
               try {
                   const ordersSnapshot = await getDocs(ordersCollection);
                   const ordersData = ordersSnapshot.docs.map(d => ({ ...d.data() as Order, id: d.id }));
@@ -422,7 +429,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     };
 
     // Add to Firestore
-    if (db) {
+    if (db && ordersCollection) {
         addDoc(ordersCollection, newOrder).then(docRef => {
             const orderWithId = { ...newOrder, id: docRef.id };
             setOrders(prev => [orderWithId, ...prev]);
@@ -466,7 +473,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   };
 
   const handleAddNewProduct = async (newProductData: Omit<Product, 'id' | 'status'>) => {
-    if (!db) {
+    if (!db || !productsCollection) {
         alert("База данных недоступна");
         return;
     }
@@ -484,7 +491,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   
   const handleBulkAddProducts = async (newProductsData: Omit<Product, 'id' | 'status'>[]) => {
     try {
-        if (db) {
+        if (db && productsCollection) {
             const promises = newProductsData.map(p => 
                 addDoc(productsCollection, { ...p, status: ProductStatus.Available })
             );
@@ -554,26 +561,43 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       handleProductUpdate(productId, { visibleToRoles });
   };
 
-  // Badge Cycle Array now explicitly includes null
-  const badgeCycle: (ProductBadge | null)[] = [null, 'ХИТ', 'акция', 'мало', 'много'];
-  
+  // Default badges for legacy support or initialization
+  const defaultBadges: string[] = ['ХИТ', 'акция', 'мало', 'много'];
+
   const handleCycleProductBadge = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
     
-    // Convert undefined to null for consistent indexing
+    // Combine dynamic badge texts and null
+    const badgeOptions = [null, ...badges.map(b => b.text)];
+    // Fallback if badges is empty, use legacy
+    const cycleOptions = badgeOptions.length > 1 ? badgeOptions : [null, ...defaultBadges];
+
     const currentBadge = product.badge || null;
-    const currentBadgeIndex = badgeCycle.indexOf(currentBadge as any);
+    const currentBadgeIndex = cycleOptions.indexOf(currentBadge);
     
-    // Fallback to 0 if not found
     const baseIndex = currentBadgeIndex === -1 ? 0 : currentBadgeIndex;
-    const nextBadgeIndex = (baseIndex + 1) % badgeCycle.length;
+    const nextBadgeIndex = (baseIndex + 1) % cycleOptions.length;
     
-    const nextBadge = badgeCycle[nextBadgeIndex];
+    const nextBadge = cycleOptions[nextBadgeIndex];
     
     // Cast to any to bypass strict type check for null, as Firestore update handles null correctly
     handleProductUpdate(productId, { badge: nextBadge } as any);
   };
+
+  const handleAddBadge = async (text: string, color: string) => {
+      if(!db || !badgesCollection) return;
+      const newBadge = { text, color };
+      const docRef = await addDoc(badgesCollection, newBadge);
+      setBadges(prev => [...prev, { id: docRef.id, ...newBadge }]);
+  }
+
+  const handleDeleteBadge = async (badgeId: string) => {
+      if(!db) return;
+      await deleteDoc(doc(db, 'shops', shopId, 'badges', badgeId));
+      setBadges(prev => prev.filter(b => b.id !== badgeId));
+  }
+
   const handleOpenGalleryModal = (images: string[], index: number) => setGalleryModalInfo({ images, index });
   const handleCloseGalleryModal = () => setGalleryModalInfo(null);
   const handleAnimationEnd = (id: number) => setFlyingItems(prev => prev.filter(item => item.id !== id));
@@ -586,7 +610,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         id: Date.now().toString(), email, passwordHash: simpleHash(password),
         isAdmin: false, customerType: 'Розничный',
       };
-      if(db) addDoc(usersCollection, newUser).then(ref => {
+      if(db && usersCollection) addDoc(usersCollection, newUser).then(ref => {
           newUser.id = ref.id;
           setAllUsers(prev => [...prev, newUser]);
       });
@@ -765,6 +789,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 orders={orders}
                 allUsers={allUsers}
                 roles={customerRoles}
+                badges={badges}
                 onAddProduct={handleAddNewProduct}
                 onBulkAddProducts={handleBulkAddProducts}
                 onDeleteProduct={handleDeleteProduct}
@@ -790,6 +815,8 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 onImportData={handleImportData}
                 onAddRole={handleAddRole}
                 onDeleteRole={handleDeleteRole}
+                onAddBadge={handleAddBadge}
+                onDeleteBadge={handleDeleteBadge}
               />
             </>
           ) : (
@@ -849,6 +876,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                   onAddToCart={handleAddToCart}
                   onOpenGalleryModal={handleOpenGalleryModal}
                   showProductImages={showProductImages}
+                  badges={badges}
                 />
               )}
             </>

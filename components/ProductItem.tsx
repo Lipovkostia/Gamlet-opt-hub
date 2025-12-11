@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, ProductBadge } from '../types';
+import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, ProductBadge, Badge } from '../types';
 
 interface ProductItemProps {
   product: Product;
@@ -22,6 +22,7 @@ interface ProductItemProps {
   allCategories?: string[];
   onUpdateCategories?: (productId: string, newCategories: string[]) => void;
   onCycleBadge?: (productId: string) => void;
+  badges?: Badge[];
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -29,11 +30,12 @@ const packagingDisplayMap: Record<ProductPackaging, string> = { головка: 
 const unitOptions: ProductUnit[] = ['kg', 'g', 'pcs', 'l'];
 const packagingOptions: ProductPackaging[] = ['головка', 'упаковка', 'штука', 'банка', 'ящик'];
 
-const badgeStyles: Record<ProductBadge, { text: string; bg: string; }> = {
-    'ХИТ': { text: 'ХИТ', bg: 'bg-green-500' },
-    'акция': { text: 'акция', bg: 'bg-red-500' },
-    'мало': { text: 'мало', bg: 'bg-sky-500' },
-    'много': { text: 'много', bg: 'bg-blue-600' },
+// Legacy default styles
+const defaultBadgeStyles: Record<string, string> = {
+    'ХИТ': 'bg-green-500',
+    'акция': 'bg-red-500',
+    'мало': 'bg-sky-500',
+    'много': 'bg-blue-600',
 };
 
 const FullCircleIcon: React.FC<{className?: string}> = ({className}) => (
@@ -232,7 +234,7 @@ const DetailsEditorComponent: React.FC<{
 );
 
 
-const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpanded, onToggleExpand, isGalleryOpen, onToggleGallery, isAdminView, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge }) => {
+const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpanded, onToggleExpand, isGalleryOpen, onToggleGallery, isAdminView, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge, badges = [] }) => {
   const [isPriceEditing, setIsPriceEditing] = useState(false);
   const [isUnitValueEditing, setIsUnitValueEditing] = useState(false);
   const [isDetailsEditing, setIsDetailsEditing] = useState(false);
@@ -572,8 +574,19 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
     return Array.from(combined).sort();
   }, [allCategories, details.categories]);
 
-  const badge = product.badge;
-  const badgeInfo = badge ? badgeStyles[badge] : null;
+  // Determine Badge display data
+  const badgeText = product.badge;
+  let badgeColor = '';
+  
+  if (badgeText) {
+      const dynamicBadge = badges.find(b => b.text === badgeText);
+      if (dynamicBadge) {
+          badgeColor = dynamicBadge.color;
+      } else {
+          // Fallback to default styles
+          badgeColor = defaultBadgeStyles[badgeText] || 'bg-gray-500';
+      }
+  }
 
   return (
     <div className={itemClasses}>
@@ -593,18 +606,18 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                     {isAdminView ? (
                         <button
                             onClick={() => onCycleBadge && onCycleBadge(product.id)}
-                            className={`w-12 mt-1 py-1 text-xs font-semibold rounded-md transition-colors text-center text-white capitalize ${
-                                badgeInfo ? badgeInfo.bg : 'bg-gray-400 hover:bg-gray-500'
+                            className={`w-12 mt-1 py-1 text-xs font-semibold rounded-md transition-colors text-center text-white capitalize overflow-hidden whitespace-nowrap ${
+                                badgeText ? badgeColor : 'bg-gray-400 hover:bg-gray-500'
                             }`}
                         >
-                            {badgeInfo ? badgeInfo.text : 'метка'}
+                            {badgeText || 'метка'}
                         </button>
                     ) : (
-                        badgeInfo && (
+                        badgeText && (
                             <div
-                                className={`w-12 mt-1 py-1 text-xs font-semibold rounded-md text-white text-center capitalize ${badgeInfo.bg}`}
+                                className={`w-12 mt-1 py-1 text-xs font-semibold rounded-md text-white text-center capitalize overflow-hidden whitespace-nowrap ${badgeColor}`}
                             >
-                                {badgeInfo.text}
+                                {badgeText}
                             </div>
                         )
                     )}

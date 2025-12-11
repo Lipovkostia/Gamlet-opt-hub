@@ -14,7 +14,8 @@ export enum OrderStatus {
 export type ProductPortion = 'whole' | 'half' | 'quarter';
 export type ProductUnit = 'kg' | 'g' | 'pcs' | 'l';
 export type ProductPackaging = 'головка' | 'упаковка' | 'штука' | 'банка' | 'ящик';
-export type ProductBadge = 'ХИТ' | 'акция' | 'мало' | 'много';
+// ProductBadge now effectively just a string, but keeping type alias for clarity
+export type ProductBadge = string; 
 export type CustomerType = string;
 
 export const ALL_CUSTOMER_TYPES: CustomerType[] = ['Розничный', 'постоянный', 'оптовый', 'крупный опт', 'средний опт'];
@@ -25,6 +26,12 @@ export interface Shop {
     ownerEmail: string;
     createdAt: string;
     roles?: string[];
+}
+
+export interface Badge {
+    id: string;
+    text: string;
+    color: string;
 }
 
 export interface Product {

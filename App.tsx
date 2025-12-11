@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
-import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge } from './types';
+import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
 import ProductList from './components/ProductList';
 import Cart from './components/Cart';
@@ -159,6 +159,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const [flyingItems, setFlyingItems] = useState<{ id: number; imageUrl: string; startRect: DOMRect }[]>([]);
   const [showProductImages, setShowProductImages] = useState(true);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
+  const [registrationType, setRegistrationType] = useState<CustomerType | null>(null);
   
   const cartIconRef = useRef<HTMLButtonElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -168,6 +169,20 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const productsCollection = useMemo(() => collection(db!, 'shops', shopId, 'products'), [shopId]);
   const ordersCollection = useMemo(() => collection(db!, 'shops', shopId, 'orders'), [shopId]);
   const usersCollection = useMemo(() => collection(db!, 'shops', shopId, 'users'), [shopId]);
+
+  useEffect(() => {
+    // Check for registration link
+    const params = new URLSearchParams(window.location.search);
+    const regType = params.get('registerType');
+    if (regType && !currentUser) {
+        // Validate type against known types to be safe
+        if (ALL_CUSTOMER_TYPES.includes(regType as CustomerType)) {
+            setRegistrationType(regType as CustomerType);
+            setAuthMode('register');
+            setAuthModalOpen(true);
+        }
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -255,8 +270,19 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   }, [cartItems]);
 
   const filteredProducts = useMemo(() => {
+    const userRole = currentUser?.customerType || 'Розничный';
+    // Filter out hidden products
     const visibleProducts = products.filter(p => p.status !== ProductStatus.Hidden);
-    let filtered = visibleProducts;
+    
+    // Filter by Role Visibility
+    // If visibleToRoles is undefined or empty, it's visible to everyone.
+    // If it has roles, the user's role must be in it.
+    const roleFiltered = visibleProducts.filter(p => {
+        if (!p.visibleToRoles || p.visibleToRoles.length === 0) return true;
+        return p.visibleToRoles.includes(userRole);
+    });
+
+    let filtered = roleFiltered;
 
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(p => p.categories.includes(selectedCategory));
@@ -270,11 +296,13 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         );
     }
     return filtered;
-  }, [selectedCategory, products, searchTerm]);
+  }, [selectedCategory, products, searchTerm, currentUser]);
   
   const handleOpenAuthModal = (mode: 'login' | 'register') => {
     setAuthMode(mode);
     setAuthModalOpen(true);
+    // Reset registration type when manually opening
+    setRegistrationType(null); 
   }
 
   const handleAddToCart = (product: Product, portion: ProductPortion, startRect?: DOMRect) => {
@@ -487,6 +515,10 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     handleProductUpdate(productId, { categories: newCategories });
     updateGlobalCategories(newCategories);
   };
+  const handleUpdateProductVisibility = (productId: string, visibleToRoles: CustomerType[]) => {
+      handleProductUpdate(productId, { visibleToRoles });
+  };
+
   const badgeCycle: (ProductBadge | undefined)[] = [undefined, 'ХИТ', 'акция', 'мало', 'много'];
   const handleCycleProductBadge = (productId: string) => {
     const product = products.find(p => p.id === productId);
@@ -610,7 +642,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       <main className="container mx-auto p-4">
          {view === 'admin' && currentUser?.isAdmin ? (
             <>
-              <h1 className="text-3xl font-bold text-gray-800 mb-6">Панель управления: {shopName}</h1>
               <AdminPage 
                 shopId={shopId}
                 products={products}
@@ -633,6 +664,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 onUpdateDetails={handleUpdateProductDetails}
                 onUpdateImages={handleUpdateProductImages}
                 onUpdateCategories={handleUpdateProductCategories}
+                onUpdateVisibility={handleUpdateProductVisibility}
                 onUpdateOrderStatus={handleUpdateOrderStatus}
                 onAddUser={handleAddUser}
                 onDeleteUser={handleDeleteUser}
@@ -722,6 +754,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
               mode={authMode}
               onClose={() => setAuthModalOpen(false)}
               onSwitchMode={(newMode) => setAuthMode(newMode)}
+              predefinedCustomerType={registrationType}
           />
       )}
 

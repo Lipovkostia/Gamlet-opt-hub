@@ -17,6 +17,7 @@ export type ProductPackaging = 'головка' | 'упаковка' | 'штук
 export type ProductBadge = 'ХИТ' | 'акция' | 'мало' | 'много';
 export type CustomerType = 'Розничный' | 'постоянный' | 'оптовый' | 'крупный опт' | 'средний опт';
 
+export const ALL_CUSTOMER_TYPES: CustomerType[] = ['Розничный', 'постоянный', 'оптовый', 'крупный опт', 'средний опт'];
 
 export interface Shop {
     id: string;
@@ -50,6 +51,7 @@ export interface Product {
     'средний опт'?: number;
     'крупный опт'?: number;
   };
+  visibleToRoles?: CustomerType[]; // If undefined or empty, visible to all
 }
 
 export interface CartItem {

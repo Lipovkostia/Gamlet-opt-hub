@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus } from '../types';
+import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus, CustomerType } from '../types';
 import ProductList from './ProductList';
 import CategoryDropdown from './CategoryDropdown';
 import ProductTable from './ProductTable';
 import AdminOrders from './AdminOrders';
 import AdminCustomers from './AdminCustomers';
 import WholesaleProductTable from './WholesaleProductTable';
+import VisibilityMatrix from './VisibilityMatrix';
 
 
 // Make TypeScript aware of the XLSX library loaded from the CDN
@@ -34,6 +35,7 @@ interface AdminPageProps {
     onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
     onUpdateImages: (productId: string, newImageUrls: string[]) => void;
     onUpdateCategories: (productId: string, newCategories: string[]) => void;
+    onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
     onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
     onAddUser: (email: string, password: string) => 'success' | 'exists';
     onDeleteUser: (userId: string) => void;
@@ -73,8 +75,8 @@ const CopyIcon: React.FC<{className?: string}> = ({className}) => (
 );
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { shopId, products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
-    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync'>('pricelist');
+    const { shopId, products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
+    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -106,6 +108,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     
     const [isHelpVisible, setIsHelpVisible] = useState(false);
     const [isTableHelpVisible, setIsTableHelpVisible] = useState(false);
+    const [isIdInfoVisible, setIsIdInfoVisible] = useState(false);
 
     // New states for table filtering
     const [tableSearchTerm, setTableSearchTerm] = useState('');
@@ -600,7 +603,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         reader.readAsText(file);
     };
 
-    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
+    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
         return (
             <button
@@ -658,38 +661,54 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
 
     return (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                        </svg>
-                        ID магазина (Административный)
-                    </h3>
-                    <p className="text-xs text-indigo-700 mt-1">
-                        Используйте этот ID для входа в панель управления с другого устройства. <span className="font-bold text-red-600">Держите его в секрете</span> и не сообщайте покупателям.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <code className="flex-grow sm:flex-grow-0 px-3 py-2 bg-white border border-indigo-200 rounded text-sm font-mono text-gray-700 select-all">
-                        {shopId}
-                    </code>
-                    <button 
-                        onClick={copyShopId}
-                        className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                        title="Копировать ID"
-                    >
-                        <CopyIcon className="w-5 h-5" />
-                    </button>
-                </div>
+        <div className="bg-white rounded-lg shadow-sm p-6 relative">
+            <div className="mb-4">
+                <button 
+                    onClick={() => setIsIdInfoVisible(!isIdInfoVisible)}
+                    className="text-xs text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1 cursor-pointer"
+                    title="Показать информацию об ID"
+                >
+                    <span>ID магазина: {shopId}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transform transition-transform ${isIdInfoVisible ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                </button>
             </div>
+
+            {isIdInfoVisible && (
+                <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                            </svg>
+                            ID магазина (Административный)
+                        </h3>
+                        <p className="text-xs text-indigo-700 mt-1">
+                            Используйте этот ID для входа в панель управления с другого устройства. <span className="font-bold text-red-600">Держите его в секрете</span> и не сообщайте покупателям.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <code className="flex-grow sm:flex-grow-0 px-3 py-2 bg-white border border-indigo-200 rounded text-sm font-mono text-gray-700 select-all">
+                            {shopId}
+                        </code>
+                        <button 
+                            onClick={copyShopId}
+                            className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                            title="Копировать ID"
+                        >
+                            <CopyIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="border-b">
                  <div className="flex items-center space-x-3 overflow-x-auto pb-4 -mx-6 px-6" role="tablist" aria-orientation="horizontal">
-                    <TabButton tabId="pricelist">Мой прайс</TabButton>
+                    <TabButton tabId="pricelist">Каталог</TabButton>
                     <TabButton tabId="table">Прайс лист таблицей</TabButton>
                     <TabButton tabId="wholesale_pricelist">Оптовый прайс</TabButton>
+                    <TabButton tabId="visibility">Настройка видимости</TabButton>
                     <TabButton tabId="orders">Заказы</TabButton>
                     <TabButton tabId="customers">Покупатели</TabButton>
                     <TabButton tabId="add">Добавить товар</TabButton>
@@ -842,6 +861,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onUpdateDetails={onUpdateDetails}
                         onUpdateCategories={onUpdateCategories}
                         onUpdateImages={onUpdateImages}
+                        onUpdateVisibility={onUpdateVisibility}
                         uspMarkups={uspMarkups}
                         setUspMarkups={setUspMarkups}
                         onApplyMarkups={handleApplyMarkups}
@@ -860,6 +880,19 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onUpdatePriceTiers={onUpdateProductPriceTiers}
                         onUpdateProductCostPrice={onUpdateProductCostPrice}
                         onBulkUpdateWholesalePrices={onBulkUpdateWholesalePrices}
+                    />
+                </div>
+            )}
+
+            {activeTab === 'visibility' && (
+                <div className="mt-6">
+                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Настройка видимости товаров</h3>
+                    <p className="text-sm text-gray-600 pb-4">
+                        Управляйте тем, какие товары видны для конкретных ролей покупателей.
+                    </p>
+                    <VisibilityMatrix
+                        products={products}
+                        onUpdateVisibility={onUpdateVisibility}
                     />
                 </div>
             )}
@@ -891,7 +924,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 <div className="divide-y divide-gray-200">
                     {/* Add Product Form */}
                     <div className="pb-8">
-                        <h3 className="text-lg font-semibold text-gray-700 mb-4 mt-6">Добавить новый товар вручную</h3>
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4 mt-6">Добавить нового товара вручную</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div>
                                 <label htmlFor="name" className="block text-sm font-medium text-gray-700">Название</label>

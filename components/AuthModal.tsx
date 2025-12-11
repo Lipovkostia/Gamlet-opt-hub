@@ -1,10 +1,13 @@
+
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
+import { CustomerType } from '../types';
 
 interface AuthModalProps {
     mode: 'login' | 'register';
     onClose: () => void;
     onSwitchMode: (mode: 'login' | 'register') => void;
+    predefinedCustomerType?: CustomerType | null;
 }
 
 const XIcon: React.FC<{className?: string}> = ({className}) => (
@@ -13,7 +16,7 @@ const XIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode, predefinedCustomerType }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -33,7 +36,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode }) =>
                 setError('Неверный пароль.');
             }
         } else {
-            const result = register(email, password);
+            // Pass predefinedCustomerType if exists, otherwise default is used inside context
+            const result = register(email, password, predefinedCustomerType || undefined);
             if (result === 'success') {
                 onClose();
             } else {
@@ -46,9 +50,16 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode }) =>
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-sm" role="dialog" aria-modal="true">
                 <div className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-bold text-gray-800">
-                        {mode === 'login' ? 'Вход' : 'Регистрация'}
-                    </h2>
+                    <div className="flex flex-col">
+                        <h2 className="text-xl font-bold text-gray-800">
+                            {mode === 'login' ? 'Вход' : 'Регистрация'}
+                        </h2>
+                        {mode === 'register' && predefinedCustomerType && (
+                            <span className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mt-1">
+                                {predefinedCustomerType}
+                            </span>
+                        )}
+                    </div>
                     <button onClick={onClose} className="p-2 text-gray-500 rounded-full hover:bg-gray-100 focus:outline-none">
                         <XIcon className="w-6 h-6"/>
                     </button>
@@ -83,16 +94,23 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode }) =>
                     >
                         {mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
                     </button>
-                    <p className="text-sm text-center text-gray-600">
-                        {mode === 'login' ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
-                        <button
-                            type="button"
-                            onClick={() => onSwitchMode(mode === 'login' ? 'register' : 'login')}
-                            className="font-medium text-indigo-600 hover:underline ml-1"
-                        >
-                           {mode === 'login' ? 'Зарегистрируйтесь' : 'Войдите'}
-                        </button>
-                    </p>
+                    {!predefinedCustomerType && (
+                        <p className="text-sm text-center text-gray-600">
+                            {mode === 'login' ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
+                            <button
+                                type="button"
+                                onClick={() => onSwitchMode(mode === 'login' ? 'register' : 'login')}
+                                className="font-medium text-indigo-600 hover:underline ml-1"
+                            >
+                            {mode === 'login' ? 'Зарегистрируйтесь' : 'Войдите'}
+                            </button>
+                        </p>
+                    )}
+                    {predefinedCustomerType && mode === 'register' && (
+                        <p className="text-xs text-center text-gray-500 mt-2">
+                            Регистрация для статуса: <b>{predefinedCustomerType}</b>.
+                        </p>
+                    )}
                 </form>
             </div>
         </div>

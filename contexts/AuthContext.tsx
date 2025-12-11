@@ -1,6 +1,6 @@
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types';
+import { User, CustomerType } from '../types';
 import { db } from '../lib/firebase';
 import { collection, getDocs, addDoc, query, where } from 'firebase/firestore';
 
@@ -17,7 +17,7 @@ const simpleHash = (str: string) => {
 interface AuthContextType {
   currentUser: User | null;
   login: (email: string, password: string) => Promise<'success' | 'not_found' | 'wrong_password'>;
-  register: (email: string, password: string) => Promise<'success' | 'exists'>;
+  register: (email: string, password: string, customerType?: CustomerType) => Promise<'success' | 'exists'>;
   logout: () => void;
   updateUserDetails: (userId: string, details: { name: string; city: string; address: string; }) => void;
   changePassword: (userId: string, oldPassword: string, newPassword: string) => 'success' | 'wrong_password';
@@ -145,7 +145,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, shopId }) 
       return result.status;
   };
 
-  const register = async (email: string, password: string): Promise<'success' | 'exists'> => {
+  const register = async (email: string, password: string, customerType: CustomerType = 'Розничный'): Promise<'success' | 'exists'> => {
     if (users.some(u => u.email === email)) {
       return 'exists';
     }
@@ -155,7 +155,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, shopId }) 
       email,
       passwordHash: simpleHash(password),
       isAdmin: false,
-      customerType: 'Розничный',
+      customerType: customerType,
     };
 
     if (db) {

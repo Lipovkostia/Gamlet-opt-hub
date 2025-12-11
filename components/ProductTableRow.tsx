@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging } from '../types';
+import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, CustomerType, ALL_CUSTOMER_TYPES } from '../types';
 
 interface ProductTableRowProps {
     product: Product;
@@ -15,6 +15,7 @@ interface ProductTableRowProps {
     onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
     onUpdateCategories: (productId: string, newCategories: string[]) => void;
     onUpdateImages: (productId: string, newImageUrls: string[]) => void;
+    onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -60,13 +61,15 @@ const MoreIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages }) => {
+const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages, onUpdateVisibility }) => {
     const [editedProduct, setEditedProduct] = useState(product);
     const [newCategory, setNewCategory] = useState('');
     const [isDirty, setIsDirty] = useState(false);
     const [isCategoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
+    const [isRolePopoverOpen, setRolePopoverOpen] = useState(false);
     const [showSaved, setShowSaved] = useState(false);
     const categoryEditorRef = useRef<HTMLDivElement>(null);
+    const roleEditorRef = useRef<HTMLDivElement>(null);
     const [isActionsMenuOpen, setActionsMenuOpen] = useState(false);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
     
@@ -89,6 +92,9 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
             if (categoryEditorRef.current && !categoryEditorRef.current.contains(event.target as Node)) {
                 setCategoryPopoverOpen(false);
             }
+            if (roleEditorRef.current && !roleEditorRef.current.contains(event.target as Node)) {
+                setRolePopoverOpen(false);
+            }
             if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
                 setActionsMenuOpen(false);
             }
@@ -99,7 +105,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [categoryEditorRef, imageEditorRef, actionsMenuRef]);
+    }, [categoryEditorRef, roleEditorRef, imageEditorRef, actionsMenuRef]);
 
      useEffect(() => {
         // Cleanup camera stream
@@ -175,6 +181,24 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         setIsDirty(true);
     };
 
+    const handleRoleToggle = (role: CustomerType) => {
+        const currentRoles = editedProduct.visibleToRoles || [];
+        // If currentRoles is empty, it means visible to ALL.
+        // If we toggle one, we need to handle logic carefully.
+        // Logic: if empty/undefined, clicking one means we want to restrict to JUST that one (or toggle it off? no, toggle it on).
+        // Actually simpler: Treat empty as "All selected visually" or just empty array in state.
+        // Let's assume state tracks restriction. Empty = No restriction.
+        
+        let newRoles: CustomerType[];
+        if (currentRoles.includes(role)) {
+            newRoles = currentRoles.filter(r => r !== role);
+        } else {
+            newRoles = [...currentRoles, role];
+        }
+        setEditedProduct(prev => ({...prev, visibleToRoles: newRoles}));
+        setIsDirty(true);
+    };
+
     const handleAddNewCategory = () => {
         const trimmed = newCategory.trim();
         if (trimmed && !editedProduct.categories.includes(trimmed)) {
@@ -204,6 +228,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         });
         onUpdateUnitValue(product.id, editedProduct.unitValue);
         onUpdateCategories(product.id, editedProduct.categories);
+        onUpdateVisibility(product.id, editedProduct.visibleToRoles || []);
         
         const originalPortions = new Set(product.allowedPortions);
         const newPortions = new Set(editedProduct.allowedPortions);
@@ -438,6 +463,36 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     )}
                 </div>
             </td>
+            <td className="py-2 px-2 align-top">
+                <div className="relative">
+                    <button onClick={() => setRolePopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline border border-dashed border-gray-300 px-2 py-1 rounded">
+                        {!editedProduct.visibleToRoles || editedProduct.visibleToRoles.length === 0 
+                            ? 'Все роли' 
+                            : `${editedProduct.visibleToRoles.length} ролей`
+                        }
+                    </button>
+                    {isRolePopoverOpen && (
+                        <div ref={roleEditorRef} className="absolute z-10 mt-2 w-48 bg-white border border-gray-300 rounded-lg shadow-lg p-3 left-0">
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Отображать для:</label>
+                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                                <div className="text-xs text-gray-500 mb-2 italic">Если ничего не выбрано — видно всем.</div>
+                                {ALL_CUSTOMER_TYPES.map(role => (
+                                    <div key={role} className="flex items-center">
+                                        <input 
+                                            id={`role-${product.id}-${role}`} 
+                                            type="checkbox" 
+                                            checked={(editedProduct.visibleToRoles || []).includes(role)} 
+                                            onChange={() => handleRoleToggle(role)} 
+                                            className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor={`role-${product.id}-${role}`} className="ml-2 block text-xs text-gray-900 capitalize">{role}</label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </td>
             <td className="py-2 px-2">
                 <input type="number" name="pricePerUnit" value={editedProduct.pricePerUnit} onChange={handleNumberChange} className={`${baseInputClasses} mb-1`} />
                 <select name="unit" value={editedProduct.unit} onChange={handleGenericChange} className={baseInputClasses}>
@@ -473,14 +528,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                 ) : <span className="text-xs text-gray-400">N/A</span>}
             </td>
             <td className="py-2 px-2"><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={baseInputClasses} placeholder="-" /></td>
-            <td className="py-2 px-2">
-                <div className="relative">
-                    <input type="number" name="usp1Price" value={editedProduct.usp1Price ?? ''} onChange={handleUspPriceChange} className={`${baseInputClasses} pr-7`} placeholder="-" />
-                    <button type="button" onClick={() => handleMarkupTypeChange('usp1', !(editedProduct.usp1UseGlobalMarkup !== false))} className={`absolute inset-y-0 right-0 top-1 flex items-center px-2 rounded-r-md focus:outline-none ${editedProduct.usp1UseGlobalMarkup !== false ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`} title={editedProduct.usp1UseGlobalMarkup !== false ? 'Используется общая наценка. Нажмите для ручного ввода.' : 'Ручной ввод. Нажмите для использования общей наценки.'}>
-                        <span className="text-xs font-bold">{editedProduct.usp1UseGlobalMarkup !== false ? '%' : '₽'}</span>
-                    </button>
-                </div>
-            </td>
             <td className="py-2 px-2 text-center align-top">
                 <div className="flex items-center justify-center gap-2 h-full">
                     <div className="flex-grow">

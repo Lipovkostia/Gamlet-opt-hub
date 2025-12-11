@@ -664,8 +664,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
 
     return (
-        <div className="bg-white rounded-lg shadow-sm p-6 relative">
-            <div className="mb-4">
+        <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-sm px-0 py-2 sm:p-6 relative w-full">
+            <div className="mb-2 sm:mb-4 px-1 sm:px-0">
                 <button 
                     onClick={() => setIsIdInfoVisible(!isIdInfoVisible)}
                     className="text-xs text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1 cursor-pointer"
@@ -679,7 +679,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             </div>
 
             {isIdInfoVisible && (
-                <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="mb-2 sm:mb-6 p-2 sm:p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
                         <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor">
@@ -707,7 +707,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             <div className="border-b">
-                 <div className="flex items-center space-x-3 overflow-x-auto pb-4 -mx-6 px-6" role="tablist" aria-orientation="horizontal">
+                 <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto pb-2 sm:pb-4 px-2 sm:-mx-6 sm:px-6" role="tablist" aria-orientation="horizontal">
                     <TabButton tabId="pricelist">Каталог</TabButton>
                     <TabButton tabId="table">Прайс лист таблицей</TabButton>
                     <TabButton tabId="wholesale_pricelist">Оптовый прайс</TabButton>
@@ -722,7 +722,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             </div>
 
             {activeTab === 'pricelist' && (
-                <div className="mt-6">
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
                         <h3 className="text-lg font-semibold text-gray-700">Управление товарами</h3>
                         <button onClick={() => setIsHelpVisible(!isHelpVisible)} className="text-gray-400 hover:text-gray-600">
@@ -772,7 +772,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
             
             {activeTab === 'table' && (
-                <div className="mt-6">
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
                         <h3 className="text-lg font-semibold text-gray-700">Редактирование прайс-листа</h3>
                         <button onClick={() => setIsTableHelpVisible(!isTableHelpVisible)} className="text-gray-400 hover:text-gray-600">
@@ -874,7 +874,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             {activeTab === 'wholesale_pricelist' && (
-                <div className="mt-6">
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Оптовый прайс-лист</h3>
                      <p className="text-sm text-gray-600 pb-4">
                         Вносите оптовые цены для разных типов покупателей. Кнопка "Сохранить" для каждой строки становится активной после внесения изменений.
@@ -890,7 +890,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             {activeTab === 'visibility' && (
-                <div className="mt-6">
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Настройка видимости товаров</h3>
                     <p className="text-sm text-gray-600 pb-4">
                         Управляйте тем, какие товары видны для конкретных ролей покупателей.
@@ -904,7 +904,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             {activeTab === 'orders' && (
-                <div className="mt-6">
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <AdminOrders
                         orders={orders}
                         users={allUsers}
@@ -914,7 +914,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             {activeTab === 'customers' && (
-                <div className="mt-6">
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <AdminCustomers
                         shopId={shopId}
                         users={allUsers}
@@ -930,7 +930,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             {activeTab === 'add' && (
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-gray-200 mt-2 sm:mt-6 px-1 sm:px-0">
                     {/* Add Product Form */}
                     <div className="pb-8">
                         <h3 className="text-lg font-semibold text-gray-700 mb-4 mt-6">Добавить нового товара вручную</h3>
@@ -1119,7 +1119,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
             
             {activeTab === 'import' && (
-                 <div className="mt-6">
+                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">Массовый импорт из Excel</h3>
                     <p className="text-sm text-gray-600 mb-4">
                         Скачайте шаблон, заполните его и загрузите файл для добавления сразу нескольких товаров.
@@ -1144,7 +1144,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
 
             {activeTab === 'importSheets' && (
-                 <div className="mt-6">
+                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Импорт из Google Sheets</h3>
                     <div className="p-4 border rounded-lg bg-gray-50 space-y-3">
                         <div className="flex justify-between items-start gap-4">
@@ -1181,7 +1181,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             )}
             
             {activeTab === 'sync' && (
-                <div className="mt-6 max-w-2xl">
+                <div className="mt-2 sm:mt-6 max-w-2xl px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">Экспорт и Импорт данных</h3>
                     <p className="text-sm text-gray-600 mb-6">
                         Эта функция позволяет сохранить все данные приложения (товары, заказы, покупатели) в один файл. Этот файл можно использовать для создания резервной копии или для переноса данных на другое устройство, чтобы продолжить работу.

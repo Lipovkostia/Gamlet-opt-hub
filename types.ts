@@ -1,3 +1,4 @@
+
 export enum ProductStatus {
   Available = 'available',
   OutOfStock = 'out_of_stock',
@@ -16,6 +17,13 @@ export type ProductPackaging = 'головка' | 'упаковка' | 'штук
 export type ProductBadge = 'ХИТ' | 'акция' | 'мало' | 'много';
 export type CustomerType = 'Розничный' | 'постоянный' | 'оптовый' | 'крупный опт' | 'средний опт';
 
+
+export interface Shop {
+    id: string;
+    name: string;
+    ownerEmail: string;
+    createdAt: string;
+}
 
 export interface Product {
   id: string;

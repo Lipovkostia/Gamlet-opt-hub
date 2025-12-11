@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging } from '../types';
 
@@ -224,15 +225,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         setIsDirty(false);
     };
 
-    const fileToBase64 = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = error => reject(error);
-        });
-    };
-
     const handleDeleteImage = (indexToDelete: number) => {
         if (product.imageUrls.length <= 1) {
             alert('Нельзя удалить последнее изображение товара.');
@@ -242,15 +234,59 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         onUpdateImages(product.id, newImageUrls);
     };
 
+    // Helper to compress images before upload
+    const compressImage = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800; // Resize to reasonable max width
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.drawImage(img, 0, 0, width, height);
+                        // Compress to JPEG 0.7 quality
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    } else {
+                        reject(new Error("Canvas context missing"));
+                    }
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
     const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
             const files = Array.from(event.target.files);
             try {
-                const base64Promises = files.map(fileToBase64);
+                // Changed from fileToBase64 to compressImage
+                const base64Promises = files.map(compressImage);
                 const newBase64Urls = await Promise.all(base64Promises);
                 onUpdateImages(product.id, [...product.imageUrls, ...newBase64Urls]);
             } catch (error) {
-                console.error("Error converting files to base64:", error);
+                console.error("Error compressing/loading images:", error);
                 alert("Не удалось загрузить изображения.");
             }
         }
@@ -286,13 +322,25 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        
+        // Cap resolution
+        const MAX_DIM = 1000;
+        let w = video.videoWidth;
+        let h = video.videoHeight;
+        
+        if (w > MAX_DIM || h > MAX_DIM) {
+             const ratio = w / h;
+             if (w > h) { w = MAX_DIM; h = MAX_DIM / ratio; }
+             else { h = MAX_DIM; w = MAX_DIM * ratio; }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
         
         const context = canvas.getContext('2d');
         if (context) {
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg');
+            context.drawImage(video, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             onUpdateImages(product.id, [...product.imageUrls, dataUrl]);
         }
         stopCamera();

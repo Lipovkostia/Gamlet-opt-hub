@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef } from 'react';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus } from '../types';
 import ProductList from './ProductList';
 import CategoryDropdown from './CategoryDropdown';
@@ -12,11 +13,12 @@ import WholesaleProductTable from './WholesaleProductTable';
 declare var XLSX: any;
 
 interface AdminPageProps {
+    shopId: string;
     products: Product[];
     allCategories: string[];
     orders: Order[];
     allUsers: User[];
-    onAddProduct: (product: Omit<Product, 'id' | 'status'>) => void;
+    onAddProduct: (product: Omit<Product, 'id' | 'status'>) => Promise<void>;
     onBulkAddProducts: (products: Omit<Product, 'id' | 'status'>[]) => void;
     onDeleteProduct: (productId: string) => void;
     onCycleStatus: (productId: string) => void;
@@ -45,8 +47,33 @@ const packagingDisplayMap: Record<ProductPackaging, string> = { головка: 
 const unitOptions: ProductUnit[] = ['kg', 'g', 'pcs', 'l'];
 const packagingOptions: ProductPackaging[] = ['головка', 'упаковка', 'штука', 'банка', 'ящик'];
 
+const CameraIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+
+const PlusIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+    </svg>
+);
+
+const TrashIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+);
+
+const CopyIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+);
+
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
+    const { shopId, products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
     const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
@@ -56,10 +83,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [unit, setUnit] = useState<ProductUnit>('kg');
     const [packaging, setPackaging] = useState<ProductPackaging>('головка');
     const [imageUrls, setImageUrls] = useState('');
+    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     const [allowHalf, setAllowHalf] = useState(false);
     const [allowQuarter, setAllowQuarter] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
     const [newCategory, setNewCategory] = useState('');
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // State for Google Sheets import
     const [sheetUrl, setSheetUrl] = useState('');
@@ -86,8 +116,18 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     // State for USP markups
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
 
-    // Ref for file input
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    // Ref for file inputs
+    const fileInputRef = useRef<HTMLInputElement>(null); // For JSON import
+    const imageFileInputRef = useRef<HTMLInputElement>(null); // For Image upload
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        // Cleanup camera stream on unmount or tab switch
+        return () => {
+            stopCamera();
+        };
+    }, [activeTab]);
 
     const adminCategories = useMemo(() => [
         ...new Set(products.map(p => p.categories).flat())
@@ -158,6 +198,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
     };
 
+    const stopCamera = () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+        setIsCameraActive(false);
+    };
 
     const resetForm = () => {
         setName('');
@@ -167,14 +214,24 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         setUnit('kg');
         setPackaging('головка');
         setImageUrls('');
+        setUploadedImages([]);
         setAllowHalf(false);
         setAllowQuarter(false);
         setSelectedCategories(new Set());
         setNewCategory('');
+        stopCamera();
     }
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const manualUrls = imageUrls.split(',').map(url => url.trim()).filter(url => url);
+        const finalImageUrls = [...manualUrls, ...uploadedImages];
+
+        if (finalImageUrls.length === 0) {
+            alert("Пожалуйста, добавьте хотя бы одно изображение (ссылку или файл).");
+            return;
+        }
 
         const allowedPortions: ProductPortion[] = ['whole'];
         if (unit === 'kg') {
@@ -190,15 +247,136 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             unit,
             packaging,
             categories: Array.from(selectedCategories),
-            imageUrls: imageUrls.split(',').map(url => url.trim()).filter(url => url),
+            imageUrls: finalImageUrls,
             allowedPortions,
             priceOverridesPerUnit: {}, // Initially no overrides
             usp1UseGlobalMarkup: true,
         };
 
-        onAddProduct(newProduct);
-        alert('Товар успешно добавлен!');
-        resetForm();
+        setIsSubmitting(true);
+        try {
+            await onAddProduct(newProduct);
+            alert('Товар успешно добавлен!');
+            resetForm();
+            setActiveTab('pricelist'); // Switch tab to view the new product
+        } catch (error) {
+            console.error("Error adding product:", error);
+            alert("Ошибка при добавлении товара. Возможно, размер изображений слишком велик.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Helper to compress images before upload (client-side resize)
+    const compressImage = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target?.result as string;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800; // Resize to reasonable max dimensions
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                    } else {
+                        if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                        }
+                    }
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                         reject(new Error("Canvas context error"));
+                         return;
+                    }
+                    ctx.drawImage(img, 0, 0, width, height);
+                    // Compress to JPEG 0.7 quality to save space
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    resolve(dataUrl);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    const handleImageFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (event.target.files) {
+            const files = Array.from(event.target.files);
+            try {
+                // Use compressImage instead of raw file conversion
+                const base64Promises = files.map(compressImage);
+                const newBase64Urls = await Promise.all(base64Promises);
+                setUploadedImages(prev => [...prev, ...newBase64Urls]);
+            } catch (error) {
+                console.error("Error compressing/loading images:", error);
+                alert("Не удалось обработать изображения.");
+            }
+            // Reset input so same file can be selected again if needed
+            event.target.value = '';
+        }
+    };
+
+    const handleOpenCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+            setIsCameraActive(true);
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            alert("Не удалось получить доступ к камере. Проверьте разрешения.");
+        }
+    };
+
+    const handleTakePicture = () => {
+        if (!videoRef.current || !canvasRef.current) return;
+        
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        
+        // Cap resolution for camera pictures too
+        const MAX_DIM = 1000;
+        let w = video.videoWidth;
+        let h = video.videoHeight;
+        
+        if (w > MAX_DIM || h > MAX_DIM) {
+             const ratio = w / h;
+             if (w > h) { w = MAX_DIM; h = MAX_DIM / ratio; }
+             else { h = MAX_DIM; w = MAX_DIM * ratio; }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        
+        const context = canvas.getContext('2d');
+        if (context) {
+            context.drawImage(video, 0, 0, w, h);
+            // Use JPEG compression
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            setUploadedImages(prev => [...prev, dataUrl]);
+        }
+        stopCamera();
+    };
+
+    const handleDeleteUploadedImage = (index: number) => {
+        setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleAddImageFromFileClick = () => {
+        imageFileInputRef.current?.click();
     };
     
     const handleGoogleSheetImport = async () => {
@@ -473,9 +651,40 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
     }, [unit, packaging]);
 
+    const copyShopId = () => {
+        navigator.clipboard.writeText(shopId);
+        alert('ID магазина скопирован!');
+    }
+
 
     return (
         <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                        ID магазина (Административный)
+                    </h3>
+                    <p className="text-xs text-indigo-700 mt-1">
+                        Используйте этот ID для входа в панель управления с другого устройства. <span className="font-bold text-red-600">Держите его в секрете</span> и не сообщайте покупателям.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <code className="flex-grow sm:flex-grow-0 px-3 py-2 bg-white border border-indigo-200 rounded text-sm font-mono text-gray-700 select-all">
+                        {shopId}
+                    </code>
+                    <button 
+                        onClick={copyShopId}
+                        className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
+                        title="Копировать ID"
+                    >
+                        <CopyIcon className="w-5 h-5" />
+                    </button>
+                </div>
+            </div>
+
             <div className="border-b">
                  <div className="flex items-center space-x-3 overflow-x-auto pb-4 -mx-6 px-6" role="tablist" aria-orientation="horizontal">
                     <TabButton tabId="pricelist">Мой прайс</TabButton>
@@ -668,6 +877,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             {activeTab === 'customers' && (
                 <div className="mt-6">
                     <AdminCustomers
+                        shopId={shopId}
                         users={allUsers}
                         orders={orders}
                         onAddUser={onAddUser}
@@ -749,10 +959,97 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     </button>
                                 </div>
                             </div>
+                            
                             <div>
-                                <label htmlFor="imageUrls" className="block text-sm font-medium text-gray-700">URL изображений (через запятую)</label>
-                                <input type="text" id="imageUrls" value={imageUrls} onChange={e => setImageUrls(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Изображения</label>
+                                
+                                <div className="space-y-3">
+                                    {/* Uploaded Images Preview */}
+                                    {uploadedImages.length > 0 && (
+                                        <div className="flex space-x-2 overflow-x-auto pb-2 border p-2 rounded-md">
+                                            {uploadedImages.map((url, index) => (
+                                                <div key={index} className="relative flex-shrink-0 group">
+                                                    <img src={url} alt={`Uploaded ${index}`} className="h-20 w-20 object-cover rounded-lg border" />
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => handleDeleteUploadedImage(index)} 
+                                                        className="absolute top-1 right-1 bg-black bg-opacity-60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Action Buttons */}
+                                    {!isCameraActive && (
+                                        <div className="flex flex-wrap gap-2">
+                                             <input 
+                                                type="file" 
+                                                ref={imageFileInputRef} 
+                                                onChange={handleImageFileSelect} 
+                                                accept="image/*" 
+                                                multiple 
+                                                className="hidden" 
+                                             />
+                                             <button 
+                                                type="button"
+                                                onClick={handleAddImageFromFileClick}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                             >
+                                                <PlusIcon className="w-5 h-5" />
+                                                <span>Загрузить фото</span>
+                                             </button>
+                                             <button 
+                                                type="button"
+                                                onClick={handleOpenCamera}
+                                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                                             >
+                                                <CameraIcon className="w-5 h-5" />
+                                                <span>Сделать снимок</span>
+                                             </button>
+                                        </div>
+                                    )}
+
+                                    {/* Camera Interface */}
+                                    {isCameraActive && (
+                                        <div className="flex flex-col items-center gap-2 p-2 border rounded-md bg-gray-50">
+                                            <video ref={videoRef} autoPlay playsInline className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"></video>
+                                            <canvas ref={canvasRef} className="hidden"></canvas>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    type="button"
+                                                    onClick={handleTakePicture} 
+                                                    className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600"
+                                                >
+                                                    Снять
+                                                </button>
+                                                <button 
+                                                    type="button"
+                                                    onClick={stopCamera} 
+                                                    className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
+                                                >
+                                                    Отмена
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-2">
+                                        <label htmlFor="imageUrls" className="block text-xs font-medium text-gray-500">или укажите ссылки (через запятую)</label>
+                                        <input 
+                                            type="text" 
+                                            id="imageUrls" 
+                                            value={imageUrls} 
+                                            onChange={e => setImageUrls(e.target.value)} 
+                                            placeholder="https://example.com/image.jpg"
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                                        />
+                                    </div>
+                                </div>
                             </div>
+                            
                             {unit === 'kg' && (
                                 <div>
                                     <span className="block text-sm font-medium text-gray-700">Опции продажи (для кг)</span>
@@ -770,8 +1067,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                             )}
 
                             <div className="pt-4 flex justify-end">
-                                <button type="submit" className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                    Добавить товар
+                                <button type="submit" disabled={isSubmitting} className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400">
+                                    {isSubmitting ? 'Добавление...' : 'Добавить товар'}
                                 </button>
                             </div>
                         </form>

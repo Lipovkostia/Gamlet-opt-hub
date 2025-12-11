@@ -1,7 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 import { User, Order, CustomerType } from '../types';
 
 interface AdminCustomersProps {
+    shopId: string;
     users: User[];
     orders: Order[];
     onAddUser: (email: string, password: string) => 'success' | 'exists';
@@ -73,11 +75,12 @@ const UserEditor: React.FC<{ user: User; onSave: (updates: Partial<User> & { new
 };
 
 
-const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUser, onDeleteUser, onUpdateUserByAdmin }) => {
+const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, onAddUser, onDeleteUser, onUpdateUserByAdmin }) => {
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [generatedLink, setGeneratedLink] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
@@ -85,6 +88,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUse
         e.preventDefault();
         setError('');
         setSuccess('');
+        setGeneratedLink('');
 
         if (!login || !password) {
             setError('Логин и пароль обязательны.');
@@ -95,9 +99,16 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUse
 
         if (result === 'success') {
             setSuccess(`Пользователь ${login} успешно добавлен.`);
+            
+            // Generate auto-login link
+            // NOTE: Passing password in URL is not secure for production but acceptable for this specific MVP context
+            const origin = window.location.origin;
+            const path = window.location.pathname;
+            const link = `${origin}${path}?shopId=${shopId}&autoLogin=${encodeURIComponent(login)}&p=${encodeURIComponent(password)}`;
+            setGeneratedLink(link);
+
             setLogin('');
             setPassword('');
-            setTimeout(() => setSuccess(''), 3000);
         } else {
             setError(`Пользователь с логином ${login} уже существует.`);
         }
@@ -130,6 +141,11 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUse
         onUpdateUserByAdmin(userId, updates);
         setExpandedUserId(null); // Close editor on save
     };
+
+    const copyToClipboard = () => {
+        navigator.clipboard.writeText(generatedLink);
+        alert('Ссылка скопирована в буфер обмена');
+    }
 
 
     return (
@@ -174,6 +190,27 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ users, orders, onAddUse
                         </button>
                     </div>
                 </form>
+
+                {generatedLink && (
+                    <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg max-w-lg">
+                        <p className="text-sm font-bold text-green-800 mb-2">Ссылка для входа покупателя:</p>
+                        <p className="text-xs text-gray-600 mb-2">Отправьте эту ссылку покупателю. При переходе по ней он автоматически войдет в магазин под своим аккаунтом.</p>
+                        <div className="flex gap-2">
+                            <input 
+                                readOnly 
+                                value={generatedLink} 
+                                className="text-xs w-full p-2 border border-green-300 rounded bg-white text-gray-700 font-mono"
+                                onClick={(e) => (e.target as HTMLInputElement).select()}
+                            />
+                            <button 
+                                onClick={copyToClipboard}
+                                className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded hover:bg-green-700 whitespace-nowrap"
+                            >
+                                Копировать
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* User List */}

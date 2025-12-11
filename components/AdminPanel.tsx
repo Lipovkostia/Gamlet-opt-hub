@@ -74,7 +74,7 @@ const CopyIcon: React.FC<{className?: string}> = ({className}) => (
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
     const { shopId, products, allCategories, orders, allUsers, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData } = props;
-    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync'>('pricelist');
+    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'retail_pricelist' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -600,7 +600,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         reader.readAsText(file);
     };
 
-    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
+    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'retail_pricelist' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
         return (
             <button
@@ -688,7 +688,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             <div className="border-b">
                  <div className="flex items-center space-x-3 overflow-x-auto pb-4 -mx-6 px-6" role="tablist" aria-orientation="horizontal">
                     <TabButton tabId="pricelist">Мой прайс</TabButton>
-                    <TabButton tabId="table">Прайс лист таблицей</TabButton>
+                    <TabButton tabId="retail_pricelist">Розничный прайс</TabButton>
+                    <TabButton tabId="table">Полный каталог (Таблица)</TabButton>
                     <TabButton tabId="wholesale_pricelist">Оптовый прайс</TabButton>
                     <TabButton tabId="orders">Заказы</TabButton>
                     <TabButton tabId="customers">Покупатели</TabButton>
@@ -749,10 +750,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             )}
             
-            {activeTab === 'table' && (
+            {(activeTab === 'table' || activeTab === 'retail_pricelist') && (
                 <div className="mt-6">
                     <div className="flex items-center gap-2 mb-4">
-                        <h3 className="text-lg font-semibold text-gray-700">Редактирование прайс-листа</h3>
+                        <h3 className="text-lg font-semibold text-gray-700">
+                            {activeTab === 'retail_pricelist' ? 'Розничный прайс-лист' : 'Полный каталог товаров (все поля)'}
+                        </h3>
                         <button onClick={() => setIsTableHelpVisible(!isTableHelpVisible)} className="text-gray-400 hover:text-gray-600">
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
@@ -763,6 +766,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         <div className="overflow-hidden">
                              <p className="text-sm text-gray-600 pb-4">
                                 Вносите изменения прямо в таблицу. Кнопка "Сохранить" для каждой строки становится активной после внесения изменений.
+                                {activeTab === 'retail_pricelist' && (
+                                    <span className="block mt-1 font-semibold text-indigo-600">Этот прайс видят ваши розничные покупатели. Внутренние параметры (себестоимость, УТП) скрыты для удобства.</span>
+                                )}
                              </p>
                         </div>
                      </div>
@@ -845,6 +851,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         uspMarkups={uspMarkups}
                         setUspMarkups={setUspMarkups}
                         onApplyMarkups={handleApplyMarkups}
+                        showCostAndUsp={activeTab === 'table'} // Hide internal columns if in Retail Price tab
                     />
                 </div>
             )}

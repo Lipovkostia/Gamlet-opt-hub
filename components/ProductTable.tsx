@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Product, ProductPortion, ProductUnit, ProductPackaging } from '../types';
 import ProductTableRow from './ProductTableRow';
@@ -19,9 +20,10 @@ interface ProductTableProps {
     uspMarkups: { usp1: string; };
     setUspMarkups: React.Dispatch<React.SetStateAction<{ usp1: string; }>>;
     onApplyMarkups: () => void;
+    showCostAndUsp?: boolean;
 }
 
-const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, ...propsForRow }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, showCostAndUsp = true, ...propsForRow }) => {
     return (
         <div className="overflow-x-auto relative shadow-md sm:rounded-lg">
             <table className="w-full text-sm text-left text-gray-500">
@@ -36,22 +38,30 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                         <th scope="col" className="py-3 px-2 min-w-[150px]">Значение / Вид</th>
                         <th scope="col" className="py-3 px-2 min-w-[180px]">Порции (для кг)</th>
                         <th scope="col" className="py-3 px-2 min-w-[180px]">Спец. цены (для кг)</th>
-                        <th scope="col" className="py-3 px-2 min-w-[120px]">Себест., ₽</th>
-                        <th scope="col" className="py-3 px-2 min-w-[150px]">
-                            <div className="flex flex-col">
-                                <span>УТП 1, ₽</span>
-                                <div className="flex items-center gap-1 mt-1">
-                                    <input type="number" placeholder="%" value={uspMarkups.usp1} onChange={e => setUspMarkups(prev => ({...prev, usp1: e.target.value}))} className="w-20 p-1 text-xs border rounded"/>
-                                    <span className="text-xs text-gray-500">%</span>
-                                </div>
-                            </div>
-                        </th>
+                        
+                        {showCostAndUsp && (
+                            <>
+                                <th scope="col" className="py-3 px-2 min-w-[120px]">Себест., ₽</th>
+                                <th scope="col" className="py-3 px-2 min-w-[150px]">
+                                    <div className="flex flex-col">
+                                        <span>УТП 1, ₽</span>
+                                        <div className="flex items-center gap-1 mt-1">
+                                            <input type="number" placeholder="%" value={uspMarkups.usp1} onChange={e => setUspMarkups(prev => ({...prev, usp1: e.target.value}))} className="w-20 p-1 text-xs border rounded"/>
+                                            <span className="text-xs text-gray-500">%</span>
+                                        </div>
+                                    </div>
+                                </th>
+                            </>
+                        )}
+                        
                         <th scope="col" className="py-3 px-2 w-40 text-center">
                             <div className="flex flex-col items-center gap-1">
                                 <span>Действия</span>
-                                <button onClick={onApplyMarkups} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-                                    Применить наценки
-                                </button>
+                                {showCostAndUsp && (
+                                    <button onClick={onApplyMarkups} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
+                                        Применить наценки
+                                    </button>
+                                )}
                             </div>
                         </th>
                     </tr>
@@ -61,6 +71,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                         <ProductTableRow 
                             key={product.id}
                             product={product}
+                            showCostAndUsp={showCostAndUsp}
                             {...propsForRow}
                         />
                     ))}

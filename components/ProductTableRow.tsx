@@ -15,6 +15,7 @@ interface ProductTableRowProps {
     onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
     onUpdateCategories: (productId: string, newCategories: string[]) => void;
     onUpdateImages: (productId: string, newImageUrls: string[]) => void;
+    showCostAndUsp?: boolean;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -60,7 +61,7 @@ const MoreIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages }) => {
+const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages, showCostAndUsp = true }) => {
     const [editedProduct, setEditedProduct] = useState(product);
     const [newCategory, setNewCategory] = useState('');
     const [isDirty, setIsDirty] = useState(false);
@@ -195,13 +196,17 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         
         onUpdateDetails(product.id, { name: editedProduct.name, description: editedProduct.description, unit: editedProduct.unit, packaging: editedProduct.packaging });
         onUpdatePrices(product.id, { pricePerUnit: editedProduct.pricePerUnit, priceOverridesPerUnit: editedProduct.priceOverridesPerUnit });
-        onUpdateUspPrices(product.id, {
-            costPrice: editedProduct.costPrice,
-            usp1Price: editedProduct.usp1Price,
-        });
-        onUpdateUspMarkupFlags(product.id, {
-            usp1UseGlobalMarkup: editedProduct.usp1UseGlobalMarkup,
-        });
+        
+        if (showCostAndUsp) {
+            onUpdateUspPrices(product.id, {
+                costPrice: editedProduct.costPrice,
+                usp1Price: editedProduct.usp1Price,
+            });
+            onUpdateUspMarkupFlags(product.id, {
+                usp1UseGlobalMarkup: editedProduct.usp1UseGlobalMarkup,
+            });
+        }
+        
         onUpdateUnitValue(product.id, editedProduct.unitValue);
         onUpdateCategories(product.id, editedProduct.categories);
         
@@ -472,15 +477,21 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     </div>
                 ) : <span className="text-xs text-gray-400">N/A</span>}
             </td>
-            <td className="py-2 px-2"><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={baseInputClasses} placeholder="-" /></td>
-            <td className="py-2 px-2">
-                <div className="relative">
-                    <input type="number" name="usp1Price" value={editedProduct.usp1Price ?? ''} onChange={handleUspPriceChange} className={`${baseInputClasses} pr-7`} placeholder="-" />
-                    <button type="button" onClick={() => handleMarkupTypeChange('usp1', !(editedProduct.usp1UseGlobalMarkup !== false))} className={`absolute inset-y-0 right-0 top-1 flex items-center px-2 rounded-r-md focus:outline-none ${editedProduct.usp1UseGlobalMarkup !== false ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`} title={editedProduct.usp1UseGlobalMarkup !== false ? 'Используется общая наценка. Нажмите для ручного ввода.' : 'Ручной ввод. Нажмите для использования общей наценки.'}>
-                        <span className="text-xs font-bold">{editedProduct.usp1UseGlobalMarkup !== false ? '%' : '₽'}</span>
-                    </button>
-                </div>
-            </td>
+            
+            {showCostAndUsp && (
+                <>
+                    <td className="py-2 px-2"><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={baseInputClasses} placeholder="-" /></td>
+                    <td className="py-2 px-2">
+                        <div className="relative">
+                            <input type="number" name="usp1Price" value={editedProduct.usp1Price ?? ''} onChange={handleUspPriceChange} className={`${baseInputClasses} pr-7`} placeholder="-" />
+                            <button type="button" onClick={() => handleMarkupTypeChange('usp1', !(editedProduct.usp1UseGlobalMarkup !== false))} className={`absolute inset-y-0 right-0 top-1 flex items-center px-2 rounded-r-md focus:outline-none ${editedProduct.usp1UseGlobalMarkup !== false ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'}`} title={editedProduct.usp1UseGlobalMarkup !== false ? 'Используется общая наценка. Нажмите для ручного ввода.' : 'Ручной ввод. Нажмите для использования общей наценки.'}>
+                                <span className="text-xs font-bold">{editedProduct.usp1UseGlobalMarkup !== false ? '%' : '₽'}</span>
+                            </button>
+                        </div>
+                    </td>
+                </>
+            )}
+            
             <td className="py-2 px-2 text-center align-top">
                 <div className="flex items-center justify-center gap-2 h-full">
                     <div className="flex-grow">

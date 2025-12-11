@@ -8,6 +8,7 @@ interface AuthModalProps {
     onClose: () => void;
     onSwitchMode: (mode: 'login' | 'register') => void;
     predefinedCustomerType?: CustomerType | null;
+    inline?: boolean;
 }
 
 const XIcon: React.FC<{className?: string}> = ({className}) => (
@@ -16,7 +17,7 @@ const XIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode, predefinedCustomerType }) => {
+const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode, predefinedCustomerType, inline = false }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -56,74 +57,90 @@ const AuthModal: React.FC<AuthModalProps> = ({ mode, onClose, onSwitchMode, pred
         }
     };
 
+    const cardContent = (
+        <div className={`bg-white rounded-lg shadow-xl w-full max-w-sm ${inline ? '' : ''}`} role="dialog" aria-modal="true">
+            <div className="flex justify-between items-center p-4 border-b">
+                <div className="flex flex-col">
+                    <h2 className="text-xl font-bold text-gray-800">
+                        {mode === 'login' ? 'Вход' : 'Регистрация'}
+                    </h2>
+                    {mode === 'register' && predefinedCustomerType && (
+                        <span className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mt-1">
+                            {predefinedCustomerType}
+                        </span>
+                    )}
+                </div>
+                <button onClick={onClose} className="p-2 text-gray-500 rounded-full hover:bg-gray-100 focus:outline-none">
+                    <XIcon className="w-6 h-6"/>
+                </button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                {error && <p className="text-red-500 text-sm">{error}</p>}
+                <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700">Логин</label>
+                    <input
+                        type="text"
+                        id="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="password"className="block text-sm font-medium text-gray-700">Пароль</label>
+                    <input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    />
+                </div>
+                <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                >
+                    {isLoading ? 'Загрузка...' : (mode === 'login' ? 'Войти' : 'Зарегистрироваться')}
+                </button>
+                {!predefinedCustomerType && (
+                    <p className="text-sm text-center text-gray-600">
+                        {mode === 'login' ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
+                        <button
+                            type="button"
+                            onClick={() => onSwitchMode(mode === 'login' ? 'register' : 'login')}
+                            className="font-medium text-indigo-600 hover:underline ml-1"
+                        >
+                        {mode === 'login' ? 'Зарегистрируйтесь' : 'Войдите'}
+                        </button>
+                    </p>
+                )}
+                {predefinedCustomerType && mode === 'register' && (
+                    <p className="text-xs text-center text-gray-500 mt-2">
+                        Регистрация для статуса: <b>{predefinedCustomerType}</b>.
+                        <br/>
+                        <button
+                            type="button"
+                            onClick={() => onSwitchMode('login')}
+                            className="font-medium text-indigo-600 hover:underline mt-1"
+                        >
+                            Уже есть аккаунт? Войти
+                        </button>
+                    </p>
+                )}
+            </form>
+        </div>
+    );
+
+    if (inline) {
+        return cardContent;
+    }
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-sm" role="dialog" aria-modal="true">
-                <div className="flex justify-between items-center p-4 border-b">
-                    <div className="flex flex-col">
-                        <h2 className="text-xl font-bold text-gray-800">
-                            {mode === 'login' ? 'Вход' : 'Регистрация'}
-                        </h2>
-                        {mode === 'register' && predefinedCustomerType && (
-                            <span className="text-xs text-indigo-600 font-semibold uppercase tracking-wide mt-1">
-                                {predefinedCustomerType}
-                            </span>
-                        )}
-                    </div>
-                    <button onClick={onClose} className="p-2 text-gray-500 rounded-full hover:bg-gray-100 focus:outline-none">
-                        <XIcon className="w-6 h-6"/>
-                    </button>
-                </div>
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {error && <p className="text-red-500 text-sm">{error}</p>}
-                    <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Логин</label>
-                        <input
-                            type="text"
-                            id="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="password"className="block text-sm font-medium text-gray-700">Пароль</label>
-                        <input
-                            type="password"
-                            id="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                    >
-                        {isLoading ? 'Загрузка...' : (mode === 'login' ? 'Войти' : 'Зарегистрироваться')}
-                    </button>
-                    {!predefinedCustomerType && (
-                        <p className="text-sm text-center text-gray-600">
-                            {mode === 'login' ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
-                            <button
-                                type="button"
-                                onClick={() => onSwitchMode(mode === 'login' ? 'register' : 'login')}
-                                className="font-medium text-indigo-600 hover:underline ml-1"
-                            >
-                            {mode === 'login' ? 'Зарегистрируйтесь' : 'Войдите'}
-                            </button>
-                        </p>
-                    )}
-                    {predefinedCustomerType && mode === 'register' && (
-                        <p className="text-xs text-center text-gray-500 mt-2">
-                            Регистрация для статуса: <b>{predefinedCustomerType}</b>.
-                        </p>
-                    )}
-                </form>
-            </div>
+            {cardContent}
         </div>
     );
 };

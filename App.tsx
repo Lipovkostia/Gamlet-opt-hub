@@ -148,8 +148,18 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  
+  // Registration & Auth State
+  const [registrationType, setRegistrationType] = useState<CustomerType | null>(() => {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('registerType') as CustomerType | null;
+  });
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>(() => {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('registerType') ? 'register' : 'login';
+  });
+
   const [isAccountModalOpen, setAccountModalOpen] = useState(false);
   const [view, setView] = useState<'shop' | 'admin'>('shop');
   const [orders, setOrders] = useState<Order[]>([]);
@@ -159,7 +169,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const [flyingItems, setFlyingItems] = useState<{ id: number; imageUrl: string; startRect: DOMRect }[]>([]);
   const [showProductImages, setShowProductImages] = useState(true);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
-  const [registrationType, setRegistrationType] = useState<CustomerType | null>(null);
   const [customerRoles, setCustomerRoles] = useState<string[]>(ALL_CUSTOMER_TYPES);
   
   const cartIconRef = useRef<HTMLButtonElement>(null);
@@ -193,19 +202,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       };
       fetchRoles();
   }, [shopId, currentUser]);
-
-  useEffect(() => {
-    // Check for registration link
-    const params = new URLSearchParams(window.location.search);
-    const regType = params.get('registerType');
-    if (regType && !currentUser) {
-        // Simple check if role exists in current loaded roles or defaults
-        // Note: customerRoles might not be loaded yet, so we trust the link for now or check against ALL_TYPES as fallback
-        setRegistrationType(regType as CustomerType);
-        setAuthMode('register');
-        setAuthModalOpen(true);
-    }
-  }, [currentUser]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -612,6 +608,52 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     }
   };
 
+  // --- Forced Registration Landing Page ---
+  if (registrationType && !currentUser) {
+      return (
+          <div 
+            className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center relative" 
+            style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop)' }}
+          >
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+              
+              <div className="relative z-10 w-full max-w-md">
+                  <div className="text-center mb-8">
+                      <h1 className="text-3xl font-bold text-white mb-2 shadow-sm drop-shadow-md">{shopName}</h1>
+                      <p className="text-gray-200 text-lg">Пожалуйста, зарегистрируйтесь для доступа к каталогу.</p>
+                  </div>
+                  
+                  <AuthModal
+                      mode={authMode}
+                      onClose={() => {
+                          // Clear registration flow on close
+                          setRegistrationType(null);
+                          const url = new URL(window.location.href);
+                          url.searchParams.delete('registerType');
+                          window.history.replaceState({}, '', url);
+                      }}
+                      onSwitchMode={setAuthMode}
+                      predefinedCustomerType={registrationType}
+                      inline={true}
+                  />
+                  
+                  <div className="text-center mt-6">
+                      <button 
+                        onClick={() => {
+                            setRegistrationType(null);
+                            const url = new URL(window.location.href);
+                            url.searchParams.delete('registerType');
+                            window.history.replaceState({}, '', url);
+                        }}
+                        className="text-white/70 hover:text-white underline text-sm"
+                      >
+                          Продолжить как гость
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="bg-gray-50 min-h-screen font-sans">

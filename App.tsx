@@ -287,7 +287,8 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   }, [cartItems]);
 
   const totalCartSum = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Consistent rounding with Cart.tsx
+    return cartItems.reduce((sum, item) => sum + Math.round(item.price * item.quantity), 0);
   }, [cartItems]);
 
   const totalCartWeight = useMemo(() => {
@@ -405,10 +406,13 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         date: new Date().toISOString(),
         status: OrderStatus.New,
         items: cartItems.map(item => ({
-            productId: item.id, name: `${item.name}${getPortionName(item.portion)}`,
-            quantity: item.unitValue * item.quantity, price: item.price * item.quantity,
+            productId: item.id, 
+            name: `${item.name}${getPortionName(item.portion)}`,
+            quantity: item.unitValue * item.quantity, 
+            price: Math.round(item.price * item.quantity), // Store line item TOTAL price, rounded
         })),
-        totalAmount: cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        // Consistent rounding: Sum of rounded line items
+        totalAmount: cartItems.reduce((sum, item) => sum + Math.round(item.price * item.quantity), 0),
         totalWeight: cartItems.reduce((sum, item) => {
             let weightInKg = 0;
             if (item.unit === 'kg') weightInKg = item.unitValue;
@@ -550,13 +554,25 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       handleProductUpdate(productId, { visibleToRoles });
   };
 
-  const badgeCycle: (ProductBadge | undefined)[] = [undefined, 'ХИТ', 'акция', 'мало', 'много'];
+  // Badge Cycle Array now explicitly includes null
+  const badgeCycle: (ProductBadge | null)[] = [null, 'ХИТ', 'акция', 'мало', 'много'];
+  
   const handleCycleProductBadge = (productId: string) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
-    const currentBadgeIndex = badgeCycle.findIndex(b => b === product.badge);
-    const nextBadgeIndex = (currentBadgeIndex + 1) % badgeCycle.length;
-    handleProductUpdate(productId, { badge: badgeCycle[nextBadgeIndex] });
+    
+    // Convert undefined to null for consistent indexing
+    const currentBadge = product.badge || null;
+    const currentBadgeIndex = badgeCycle.indexOf(currentBadge as any);
+    
+    // Fallback to 0 if not found
+    const baseIndex = currentBadgeIndex === -1 ? 0 : currentBadgeIndex;
+    const nextBadgeIndex = (baseIndex + 1) % badgeCycle.length;
+    
+    const nextBadge = badgeCycle[nextBadgeIndex];
+    
+    // Cast to any to bypass strict type check for null, as Firestore update handles null correctly
+    handleProductUpdate(productId, { badge: nextBadge } as any);
   };
   const handleOpenGalleryModal = (images: string[], index: number) => setGalleryModalInfo({ images, index });
   const handleCloseGalleryModal = () => setGalleryModalInfo(null);
@@ -692,7 +708,8 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                         </div>
                         <div className="flex justify-between gap-2">
                             <span className="text-gray-500">Сумма:</span>
-                            <span className="font-semibold">{totalCartSum.toLocaleString('ru-RU')} ₽</span>
+                            {/* Round cart total display for consistency */}
+                            <span className="font-semibold">{Math.round(totalCartSum).toLocaleString('ru-RU')} ₽</span>
                         </div>
                         <div className="flex justify-between gap-2">
                             <span className="text-gray-500">Вес:</span>

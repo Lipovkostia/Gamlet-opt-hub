@@ -39,7 +39,7 @@ export interface Product {
   description: string;
   allowedPortions: ProductPortion[];
   status: ProductStatus;
-  badge?: ProductBadge;
+  badge?: ProductBadge | null;
   priceOverridesPerUnit?: {
     half?: number; // Price per unit override if buying half
     quarter?: number; // Price per unit override if buying quarter

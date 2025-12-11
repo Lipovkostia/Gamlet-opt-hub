@@ -45,7 +45,8 @@ const Cart: React.FC<CartProps> = ({ cartItems, onRemoveItem, onUpdateItemQuanti
   const [orderStatus, setOrderStatus] = useState<'idle' | 'placed'>('idle');
 
   const total = useMemo(() => {
-    return cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    // Round each item total to integer before summing to ensure visual consistency
+    return cartItems.reduce((sum, item) => sum + Math.round(item.price * item.quantity), 0);
   }, [cartItems]);
 
   const handlePlaceOrderClick = () => {
@@ -145,8 +146,9 @@ const Cart: React.FC<CartProps> = ({ cartItems, onRemoveItem, onUpdateItemQuanti
                     </div>
                 </div>
                 <div className="text-right ml-auto flex-shrink-0">
-                     <p className="font-semibold text-gray-800 whitespace-nowrap">{(item.price * item.quantity).toLocaleString('ru-RU')} ₽</p>
-                     <p className="text-sm text-gray-500 whitespace-nowrap">{item.price.toLocaleString('ru-RU')} ₽ / шт.</p>
+                     {/* Round line item total for display to match total calculation */}
+                     <p className="font-semibold text-gray-800 whitespace-nowrap">{Math.round(item.price * item.quantity).toLocaleString('ru-RU')} ₽</p>
+                     <p className="text-sm text-gray-500 whitespace-nowrap">{item.price.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽ / шт.</p>
                 </div>
               </div>
             ))}

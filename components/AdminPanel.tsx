@@ -77,6 +77,12 @@ const CopyIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
+const UsersIcon: React.FC<{className?: string}> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
 const AdminPage: React.FC<AdminPageProps> = (props) => {
     const { shopId, products, allCategories, orders, allUsers, roles, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole } = props;
     const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'sync'>('pricelist');
@@ -108,6 +114,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     
     // State for admin's own category filter
     const [adminSelectedCategory, setAdminSelectedCategory] = useState<string | 'all'>('all');
+    const [previewRole, setPreviewRole] = useState<string | null>(null);
+    const [isRoleSelectorOpen, setIsRoleSelectorOpen] = useState(false);
     
     const [isHelpVisible, setIsHelpVisible] = useState(false);
     const [isTableHelpVisible, setIsTableHelpVisible] = useState(false);
@@ -127,6 +135,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const imageFileInputRef = useRef<HTMLInputElement>(null); // For Image upload
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const roleSelectorRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         // Cleanup camera stream on unmount or tab switch
@@ -135,17 +144,41 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         };
     }, [activeTab]);
 
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (roleSelectorRef.current && !roleSelectorRef.current.contains(event.target as Node)) {
+                setIsRoleSelectorOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [roleSelectorRef]);
+
     const adminCategories = useMemo(() => [
         ...new Set(products.map(p => p.categories).flat())
     ].sort(), [products]);
 
     const adminFilteredProducts = useMemo(() => {
-        // In admin view, we only filter by category, not by visibility status
-        if (adminSelectedCategory === 'all') {
-            return products;
+        let filtered = products;
+
+        // Filter by Category
+        if (adminSelectedCategory !== 'all') {
+            filtered = filtered.filter(p => p.categories.includes(adminSelectedCategory));
         }
-        return products.filter(p => p.categories.includes(adminSelectedCategory));
-    }, [adminSelectedCategory, products]);
+
+        // Filter by Preview Role (Visibility)
+        if (previewRole) {
+            filtered = filtered.filter(p => {
+                // If visibleToRoles is undefined or empty, it's visible to everyone
+                if (!p.visibleToRoles || p.visibleToRoles.length === 0) {
+                    return true;
+                }
+                return p.visibleToRoles.includes(previewRole);
+            });
+        }
+
+        return filtered;
+    }, [adminSelectedCategory, products, previewRole]);
     
     const filteredTableProducts = useMemo(() => {
         return products
@@ -725,12 +758,56 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
                         <h3 className="text-lg font-semibold text-gray-700">Управление товарами</h3>
+                        
+                        <div className="relative" ref={roleSelectorRef}>
+                            <button 
+                                onClick={() => setIsRoleSelectorOpen(!isRoleSelectorOpen)} 
+                                className={`p-1 rounded-full hover:bg-gray-100 ${previewRole ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}
+                                title="Предпросмотр для роли"
+                            >
+                                <UsersIcon className="w-5 h-5" />
+                            </button>
+                            {isRoleSelectorOpen && (
+                                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
+                                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 border-b bg-gray-50">
+                                        Предпросмотр для роли
+                                    </div>
+                                    <button 
+                                        onClick={() => { setPreviewRole(null); setIsRoleSelectorOpen(false); }}
+                                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${!previewRole ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}
+                                    >
+                                        Администратор (Все)
+                                    </button>
+                                    {roles.map(role => (
+                                        <button 
+                                            key={role}
+                                            onClick={() => { setPreviewRole(role); setIsRoleSelectorOpen(false); }}
+                                            className={`block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${previewRole === role ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}
+                                        >
+                                            {role}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <button onClick={() => setIsHelpVisible(!isHelpVisible)} className="text-gray-400 hover:text-gray-600">
                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                             </svg>
                         </button>
                     </div>
+                    
+                    {previewRole && (
+                        <div className="mb-4 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-md flex items-center justify-between">
+                            <span className="text-sm text-indigo-800">
+                                Режим просмотра: <b>{previewRole}</b>
+                            </span>
+                            <button onClick={() => setPreviewRole(null)} className="text-xs text-indigo-500 hover:text-indigo-700">
+                                Сбросить
+                            </button>
+                        </div>
+                    )}
 
                      <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isHelpVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                         <div className="overflow-hidden">

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
@@ -217,7 +216,11 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             setProducts(data);
             
             const uniqueCategories = new Set(INITIAL_CATEGORIES);
-            data.forEach(p => p.categories.forEach(c => uniqueCategories.add(c)));
+            data.forEach(p => {
+                if (Array.isArray(p.categories)) {
+                    p.categories.forEach(c => uniqueCategories.add(c));
+                }
+            });
             setAllCategories(Array.from(uniqueCategories).sort());
         } else {
              throw new Error("Firebase not configured");

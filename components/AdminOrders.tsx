@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Order, User, OrderStatus } from '../types';
 
@@ -50,7 +49,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ orders, users, onUpdateStatus
     }, [sortedOrders, searchTerm, userMap]);
 
     const handleToggleExpand = (orderId: string) => {
-        setExpandedOrderId(currentId => (currentId === orderId ? null : currentId));
+        setExpandedOrderId(prevId => (prevId === orderId ? null : orderId));
     };
 
     return (
@@ -74,44 +73,45 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ orders, users, onUpdateStatus
                         const user = userMap[order.userId];
                         const isExpanded = expandedOrderId === order.id;
                         return (
-                            <div key={order.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-                                <button 
-                                    onClick={() => handleToggleExpand(order.id)}
-                                    className="w-full text-left p-4 focus:outline-none hover:bg-gray-50 transition-colors"
-                                    aria-expanded={isExpanded}
-                                    aria-controls={`order-details-${order.id}`}
-                                >
-                                    <div className="flex flex-wrap items-center justify-between gap-4">
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-semibold text-indigo-600 truncate">Заказ #{order.id.slice(-6)}</p>
-                                            <p className="text-xs text-gray-500">{new Date(order.date).toLocaleString('ru-RU')}</p>
-                                        </div>
-                                        <div className="flex-1 min-w-0 hidden sm:block">
-                                            <p className="text-sm font-medium text-gray-800 truncate">{user?.email || 'Пользователь не найден'}</p>
-                                            {user?.name && <p className="text-xs text-gray-500 truncate">{user.name}</p>}
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-base font-bold text-gray-800">{order.totalAmount.toLocaleString('ru-RU')} ₽</span>
-                                            <div onClick={(e) => e.stopPropagation()}>
-                                                <select
-                                                    value={order.status}
-                                                    onChange={(e) => onUpdateStatus(order.id, e.target.value as OrderStatus)}
-                                                    className={`text-xs font-semibold py-1 px-2 rounded-full border-0 focus:ring-2 focus:ring-indigo-400 cursor-pointer ${statusColorMap[order.status]}`}
-                                                >
-                                                    <option value={OrderStatus.New}>Новый</option>
-                                                    <option value={OrderStatus.Completed}>Завершен</option>
-                                                    <option value={OrderStatus.Cancelled}>Отменен</option>
-                                                </select>
-                                            </div>
-                                            <ChevronDownIcon className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                                        </div>
+                            <div key={order.id} className="bg-white border border-gray-200 rounded-lg shadow-sm">
+                                <div className="w-full p-4 flex flex-wrap items-center justify-between gap-4">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-indigo-600 truncate">Заказ #{order.id.slice(-6)}</p>
+                                        <p className="text-xs text-gray-500">{new Date(order.date).toLocaleString('ru-RU')}</p>
                                     </div>
-                                </button>
-                                <div 
-                                    id={`order-details-${order.id}`}
-                                    className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
-                                >
-                                    <div className="overflow-hidden bg-gray-50">
+                                    <div className="flex-1 min-w-0 hidden sm:block">
+                                        <p className="text-sm font-medium text-gray-800 truncate">{user?.email || 'Пользователь не найден'}</p>
+                                        {user?.name && <p className="text-xs text-gray-500 truncate">{user.name}</p>}
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-base font-bold text-gray-800">{order.totalAmount.toLocaleString('ru-RU')} ₽</span>
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <select
+                                                value={order.status}
+                                                onChange={(e) => onUpdateStatus(order.id, e.target.value as OrderStatus)}
+                                                className={`text-xs font-semibold py-1 px-2 rounded-full border-0 focus:ring-2 focus:ring-indigo-400 cursor-pointer ${statusColorMap[order.status]}`}
+                                            >
+                                                <option value={OrderStatus.New}>Новый</option>
+                                                <option value={OrderStatus.Completed}>Завершен</option>
+                                                <option value={OrderStatus.Cancelled}>Отменен</option>
+                                            </select>
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleToggleExpand(order.id);
+                                            }}
+                                            className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer relative z-10"
+                                            aria-label={isExpanded ? "Свернуть" : "Развернуть"}
+                                        >
+                                            <ChevronDownIcon className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                        </button>
+                                    </div>
+                                </div>
+                                {isExpanded && (
+                                    <div className="border-t border-gray-100 bg-gray-50 rounded-b-lg">
                                         <div className="p-4 space-y-4">
                                             {/* Customer Details Block */}
                                             {user && (
@@ -135,33 +135,43 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ orders, users, onUpdateStatus
                                                             <tr>
                                                                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Товар</th>
                                                                 <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Кол-во</th>
-                                                                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Сумма</th>
+                                                                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Цена за ед.</th>
+                                                                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Итого</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="bg-white divide-y divide-gray-200">
-                                                            {order.items.map((item, index) => (
-                                                                <tr key={`${item.productId}-${index}`} className="hover:bg-gray-50">
-                                                                    <td className="px-4 py-3 text-sm text-gray-900 font-medium whitespace-normal break-words">
-                                                                        {item.name}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm text-gray-600 text-right whitespace-nowrap">
-                                                                        {item.quantity.toFixed(2)}
-                                                                    </td>
-                                                                    <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">
-                                                                        {item.price.toLocaleString('ru-RU')} ₽
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
+                                                            {(order.items || []).map((item, index) => {
+                                                                const quantity = item.quantity || 0;
+                                                                const price = item.price || 0;
+                                                                // Calculate approx unit price for display
+                                                                const unitPrice = quantity > 0 ? price / quantity : 0;
+                                                                return (
+                                                                    <tr key={`${item.productId || 'unknown'}-${index}`} className="hover:bg-gray-50">
+                                                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium whitespace-normal break-words">
+                                                                            {item.name || 'Товар'}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-600 text-right whitespace-nowrap">
+                                                                            {quantity.toFixed(2)}
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-600 text-right whitespace-nowrap">
+                                                                            ~{unitPrice.toLocaleString('ru-RU', { maximumFractionDigits: 0 })} ₽
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-sm text-gray-900 text-right whitespace-nowrap">
+                                                                            {price.toLocaleString('ru-RU')} ₽
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
                                                         </tbody>
                                                         <tfoot className="bg-gray-50 border-t border-gray-200">
                                                             <tr>
-                                                                <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right" colSpan={2}>Итого к оплате:</td>
+                                                                <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right" colSpan={3}>Итого к оплате:</td>
                                                                 <td className="px-4 py-3 text-sm font-bold text-indigo-600 text-right">{order.totalAmount.toLocaleString('ru-RU')} ₽</td>
                                                             </tr>
-                                                            {order.totalWeight > 0 && (
+                                                            {(order.totalWeight || 0) > 0 && (
                                                                 <tr>
-                                                                    <td className="px-4 py-2 text-xs text-gray-500 text-right" colSpan={3}>
-                                                                        Расчетный общий вес: <span className="font-medium">{order.totalWeight.toFixed(2)} кг</span>
+                                                                    <td className="px-4 py-2 text-xs text-gray-500 text-right" colSpan={4}>
+                                                                        Расчетный общий вес: <span className="font-medium">{(order.totalWeight || 0).toFixed(2)} кг</span>
                                                                     </td>
                                                                 </tr>
                                                             )}
@@ -171,7 +181,7 @@ const AdminOrders: React.FC<AdminOrdersProps> = ({ orders, users, onUpdateStatus
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         )
                     })

@@ -22,7 +22,7 @@ interface ProductTableProps {
     setUspMarkups: React.Dispatch<React.SetStateAction<{ usp1: string; }>>;
     onApplyMarkups: () => void;
     roles?: string[];
-    visibleColumns?: string[]; // New prop
+    visibleColumns?: string[];
 }
 
 const DEFAULT_WIDTHS: Record<string, number> = {
@@ -73,9 +73,23 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
     
     // State for Mobile Resize Menu
     const [activeResizeMenu, setActiveResizeMenu] = useState<string | null>(null);
-    const resizeMenuRef = useRef<HTMLDivElement>(null);
+    
+    // State for Mobile Drag Ghost
+    const [ghostState, setGhostState] = useState<{
+        key: string;
+        label: React.ReactNode;
+        width: number;
+        height: number;
+        startX: number;
+        startY: number;
+        initialTouchX: number;
+        initialTouchY: number;
+    } | null>(null);
 
+    const resizeMenuRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLTableElement>(null);
+    const ghostRef = useRef<HTMLDivElement>(null);
+    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
     // Load saved settings from localStorage on mount
     useEffect(() => {
@@ -156,7 +170,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
     const handleDragStart = (e: React.DragEvent, key: string) => {
         setDraggedCol(key);
         e.dataTransfer.effectAllowed = 'move';
-        setActiveResizeMenu(null); // Close menu if dragging starts
+        setActiveResizeMenu(null); 
     };
 
     const handleDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
@@ -179,19 +193,58 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
         localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
     };
 
-    // --- Touch Logic (Mobile Reorder) ---
+    // --- Enhanced Touch Logic (Mobile Reorder with Ghost) ---
     const handleTouchStart = (e: React.TouchEvent, key: string) => {
-        // Only start drag logic if not interacting with resize button
         if ((e.target as HTMLElement).closest('.resize-btn')) return;
-        setDraggedCol(key);
+        
+        const touch = e.touches[0];
+        const target = e.currentTarget as HTMLElement;
+        const rect = target.getBoundingClientRect();
+
+        // Start long press timer
+        longPressTimer.current = setTimeout(() => {
+            setDraggedCol(key);
+            setGhostState({
+                key,
+                label: COLUMN_LABELS[key],
+                width: rect.width,
+                height: rect.height,
+                startX: rect.left,
+                startY: rect.top,
+                initialTouchX: touch.clientX,
+                initialTouchY: touch.clientY
+            });
+            // Haptic feedback if available
+            if (navigator.vibrate) navigator.vibrate(50);
+        }, 300); // 300ms long press to activate drag
     };
 
     const handleTouchMove = (e: React.TouchEvent) => {
-        if (!draggedCol) return;
+        // If we haven't entered drag mode yet, clear timer if user moves finger (scrolling)
+        if (!draggedCol) {
+            if (longPressTimer.current) {
+                clearTimeout(longPressTimer.current);
+                longPressTimer.current = null;
+            }
+            return;
+        }
+
+        // If dragging, prevent scrolling
+        if (e.cancelable) e.preventDefault();
+
         const touch = e.touches[0];
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
         
+        // Update Ghost Position directly via DOM for performance
+        if (ghostRef.current && ghostState) {
+            const deltaX = touch.clientX - ghostState.initialTouchX;
+            const deltaY = touch.clientY - ghostState.initialTouchY;
+            ghostRef.current.style.transform = `translate(${ghostState.startX + deltaX}px, ${ghostState.startY + deltaY}px) rotate(3deg) scale(1.05)`;
+        }
+
+        // Find target under finger
+        const target = document.elementFromPoint(touch.clientX, touch.clientY);
         const headerCell = target?.closest('th');
+        
         if (headerCell && headerCell.dataset.colkey) {
             const targetKey = headerCell.dataset.colkey;
             if (targetKey !== draggedCol) {
@@ -209,13 +262,40 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
     };
 
     const handleTouchEnd = () => {
-        setDraggedCol(null);
-        localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+        }
+        
+        if (draggedCol) {
+            setDraggedCol(null);
+            setGhostState(null);
+            localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
+        }
     };
 
     return (
-        <div className="overflow-x-auto relative shadow-md sm:rounded-lg border border-gray-200 pb-32 sm:pb-0"> 
-            {/* Added bottom padding on mobile to ensure dropdowns/sliders have space if at the bottom */}
+        <div className="overflow-x-auto relative shadow-md sm:rounded-lg border border-gray-200 pb-32 sm:pb-0 select-none"> 
+            
+            {/* Ghost Element for Dragging */}
+            {ghostState && (
+                <div 
+                    ref={ghostRef}
+                    className="fixed z-50 bg-indigo-600 text-white shadow-2xl rounded-lg flex items-center justify-center font-bold text-sm pointer-events-none border-2 border-indigo-400 opacity-90"
+                    style={{
+                        width: ghostState.width,
+                        height: ghostState.height,
+                        left: 0,
+                        top: 0,
+                        // Initial transform set here, updated in touchMove
+                        transform: `translate(${ghostState.startX}px, ${ghostState.startY}px) rotate(3deg) scale(1.05)`,
+                        touchAction: 'none'
+                    }}
+                >
+                    {ghostState.label}
+                </div>
+            )}
+
             <table className="w-full text-sm text-left text-gray-500" ref={tableRef} style={{ tableLayout: 'fixed' }}>
                 <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-20 shadow-sm">
                     <tr>
@@ -231,15 +311,21 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                                 onTouchStart={(e) => handleTouchStart(e, key)}
                                 onTouchMove={handleTouchMove}
                                 onTouchEnd={handleTouchEnd}
-                                className={`py-3 px-2 bg-gray-100 relative group select-none border-b border-gray-200 transition-colors duration-200 cursor-move ${draggedCol === key ? 'bg-indigo-100 opacity-50' : ''}`}
+                                className={`
+                                    py-3 px-2 relative group select-none border-b border-gray-200 transition-all duration-200 cursor-grab active:cursor-grabbing
+                                    ${draggedCol === key 
+                                        ? 'bg-indigo-50 border-2 border-dashed border-indigo-300 text-transparent opacity-50' 
+                                        : 'bg-gray-100 hover:bg-gray-200'
+                                    }
+                                `}
                                 style={{ width: `${colWidths[key]}px`, minWidth: `${colWidths[key]}px` }}
                             >
-                                <div className="flex items-center justify-between pointer-events-none">
+                                <div className={`flex items-center justify-between pointer-events-none ${draggedCol === key ? 'invisible' : ''}`}>
                                     <span className="truncate mr-1">{COLUMN_LABELS[key]}</span>
                                     
                                     {/* Mobile Resize Button */}
                                     <button 
-                                        className="resize-btn pointer-events-auto p-1.5 rounded-full hover:bg-gray-200 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors"
+                                        className="resize-btn pointer-events-auto p-1.5 rounded-full hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors"
                                         onClick={(e) => {
                                             e.stopPropagation(); // Prevent drag start
                                             setActiveResizeMenu(activeResizeMenu === key ? null : key);

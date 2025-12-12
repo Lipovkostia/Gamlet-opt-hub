@@ -110,7 +110,7 @@ const UsersIcon: React.FC<{className?: string}> = ({ className }) => (
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
     const { shopId, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge } = props;
-    const [activeTab, setActiveTab] = useState<'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync'>('pricelist');
+    const [activeTab, setActiveTab] = useState<'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync'>('pricelist');
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -161,6 +161,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     
     // State for USP markups
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
+    
+    // Active Role Tab for Price List Table
+    const [activePriceListRole, setActivePriceListRole] = useState<string>('Базовый (Розничный)');
 
     // Ref for file inputs
     const fileInputRef = useRef<HTMLInputElement>(null); // For JSON import
@@ -692,7 +695,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         reader.readAsText(file);
     };
 
-    const TabButton: React.FC<{tabId: 'pricelist' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
+    const TabButton: React.FC<{tabId: 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync', children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
         return (
             <button
@@ -795,9 +798,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             <div className="border-b">
                  <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto pb-2 sm:pb-4 px-2 sm:-mx-6 sm:px-6" role="tablist" aria-orientation="horizontal">
                     <TabButton tabId="pricelist">Каталог</TabButton>
+                    <TabButton tabId="products_master">Товары</TabButton>
                     <TabButton tabId="table">Прайс лист</TabButton>
                     <TabButton tabId="badges">Метки</TabButton>
-                    <TabButton tabId="wholesale_pricelist">Опт</TabButton>
                     <TabButton tabId="visibility">Видимость</TabButton>
                     <TabButton tabId="orders">Заказы</TabButton>
                     <TabButton tabId="customers">Покупатели</TabButton>
@@ -902,6 +905,77 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                      />
                 </div>
             )}
+
+            {activeTab === 'products_master' && (
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
+                    <div className="flex items-center gap-2 mb-4">
+                        <h3 className="text-lg font-semibold text-gray-700">Все товары (Справочник)</h3>
+                    </div>
+                    
+                    <div className="mb-4 bg-gray-50 p-4 rounded-lg border">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {/* Search Input */}
+                            <div>
+                                <label htmlFor="master-search" className="block text-sm font-medium text-gray-700">Поиск</label>
+                                <input
+                                    type="text"
+                                    id="master-search"
+                                    placeholder="Название или описание..."
+                                    value={tableSearchTerm}
+                                    onChange={(e) => setTableSearchTerm(e.target.value)}
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                />
+                            </div>
+                            {/* Category Filter */}
+                            <div>
+                                <CategoryDropdown
+                                    categories={allCategories}
+                                    selectedCategory={tableFilterCategory}
+                                    onSelectCategory={setTableFilterCategory}
+                                    label="Категория"
+                                />
+                            </div>
+                            {/* Status Filter */}
+                            <div>
+                                <label htmlFor="master-status-filter" className="block text-sm font-medium text-gray-700">Статус</label>
+                                <select
+                                    id="master-status-filter"
+                                    value={tableFilterStatus}
+                                    onChange={(e) => setTableFilterStatus(e.target.value as ProductStatus | 'all')}
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                >
+                                    <option value="all">Все статусы</option>
+                                    <option value={ProductStatus.Available}>Доступен</option>
+                                    <option value={ProductStatus.OutOfStock}>Нет в наличии</option>
+                                    <option value={ProductStatus.Hidden}>Скрыт</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <ProductTable
+                        products={filteredTableProducts}
+                        allCategories={allCategories}
+                        onDeleteProduct={onDeleteProduct}
+                        onCycleStatus={onCycleStatus}
+                        onUpdatePortions={onUpdatePortions}
+                        onUpdatePrices={onUpdatePrices}
+                        onUpdatePriceTiers={onUpdateProductPriceTiers}
+                        onUpdateUspPrices={onUpdateUspPrices}
+                        onUpdateUspMarkupFlags={onUpdateUspMarkupFlags}
+                        onUpdateUnitValue={onUpdateUnitValue}
+                        onUpdateDetails={onUpdateDetails}
+                        onUpdateCategories={onUpdateCategories}
+                        onUpdateImages={onUpdateImages}
+                        onUpdateVisibility={onUpdateVisibility}
+                        uspMarkups={uspMarkups}
+                        setUspMarkups={setUspMarkups}
+                        onApplyMarkups={handleApplyMarkups}
+                        roles={roles}
+                        visibleColumns={['photo', 'name', 'description', 'price', 'cost', 'value', 'actions']}
+                    />
+                </div>
+            )}
             
             {activeTab === 'table' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
@@ -916,12 +990,31 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                      <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isTableHelpVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                         <div className="overflow-hidden">
                              <p className="text-sm text-gray-600 pb-4">
-                                Вносите изменения прямо в таблицу. Кнопка "Сохранить" для каждой строки становится активной после внесения изменений.
+                                Выберите вкладку с типом цен, который хотите отредактировать. <br/>
+                                <b>Базовый:</b> основные розничные цены. <br/>
+                                <b>Роли (Опт и др.):</b> цены, специфичные для группы клиентов.
                              </p>
                         </div>
                      </div>
 
                     <div className="mb-4">
+                        {/* Price Type Tabs */}
+                        <div className="flex space-x-2 overflow-x-auto pb-2 border-b border-gray-200 mb-4">
+                            {['Базовый (Розничный)', ...roles.filter(r => r !== 'Розничный')].map(role => (
+                                <button
+                                    key={role}
+                                    onClick={() => setActivePriceListRole(role)}
+                                    className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-t-lg transition-colors ${
+                                        activePriceListRole === role 
+                                        ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' 
+                                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {role}
+                                </button>
+                            ))}
+                        </div>
+
                         <button
                             onClick={() => setIsTableFilterVisible(!isTableFilterVisible)}
                             className="p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -1003,12 +1096,14 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     </div>
 
                     <ProductTable
+                        key={activePriceListRole} // Force re-render when switching tabs to reset internal row states
                         products={filteredTableProducts}
                         allCategories={allCategories}
                         onDeleteProduct={onDeleteProduct}
                         onCycleStatus={onCycleStatus}
                         onUpdatePortions={onUpdatePortions}
                         onUpdatePrices={onUpdatePrices}
+                        onUpdatePriceTiers={onUpdateProductPriceTiers}
                         onUpdateUspPrices={onUpdateUspPrices}
                         onUpdateUspMarkupFlags={onUpdateUspMarkupFlags}
                         onUpdateUnitValue={onUpdateUnitValue}
@@ -1021,6 +1116,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onApplyMarkups={handleApplyMarkups}
                         roles={roles}
                         visibleColumns={visibleTableColumns}
+                        roleKey={activePriceListRole === 'Базовый (Розничный)' ? undefined : activePriceListRole}
                     />
                 </div>
             )}

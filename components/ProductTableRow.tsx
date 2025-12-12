@@ -9,6 +9,7 @@ interface ProductTableRowProps {
     onCycleStatus: (productId: string) => void;
     onUpdatePortions: (productId: string, portion: ProductPortion) => void;
     onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
+    onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // New prop
     onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
     onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
@@ -17,11 +18,12 @@ interface ProductTableRowProps {
     onUpdateImages: (productId: string, newImageUrls: string[]) => void;
     onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
     roles?: string[];
-    columnOrder?: string[]; // Новый проп для порядка колонок
+    columnOrder?: string[];
+    roleKey?: string; // New prop to identify current pricing role context
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
-const packagingDisplayMap: Record<ProductPackaging, string> = { головка: 'головка', упаковка: 'упаковка', штука: 'штука', банка: 'банка', ящик: 'ящик' };
+const packagingDisplayMap: Record<ProductPackaging, string> = { головка: 'гол.', упаковка: 'упак.', штука: 'шт.', банка: 'банк.', ящик: 'ящ.' };
 const unitOptions: ProductUnit[] = ['kg', 'g', 'pcs', 'l'];
 const packagingOptions: ProductPackaging[] = ['головка', 'упаковка', 'штука', 'банка', 'ящик'];
 
@@ -70,6 +72,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     onCycleStatus, 
     onUpdatePortions, 
     onUpdatePrices, 
+    onUpdatePriceTiers,
     onUpdateUspPrices, 
     onUpdateUspMarkupFlags, 
     onUpdateUnitValue, 
@@ -78,9 +81,13 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     onUpdateImages, 
     onUpdateVisibility, 
     roles = [],
-    columnOrder = ['status', 'photo', 'name', 'description', 'categories', 'visibility', 'price', 'value', 'portions', 'special', 'cost', 'actions']
+    columnOrder = ['status', 'photo', 'name', 'description', 'categories', 'visibility', 'price', 'value', 'portions', 'special', 'cost', 'actions'],
+    roleKey // Optional: if present, we are editing a specific tier price
 }) => {
     const [editedProduct, setEditedProduct] = useState(product);
+    const [tierPrice, setTierPrice] = useState<string>(
+        roleKey && product.priceTiers ? (product.priceTiers[roleKey]?.toString() || '') : ''
+    );
     const [newCategory, setNewCategory] = useState('');
     const [isDirty, setIsDirty] = useState(false);
     const [isCategoryPopoverOpen, setCategoryPopoverOpen] = useState(false);
@@ -98,12 +105,18 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    const baseInputClasses = "mt-1 block w-full px-2 py-1.5 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm";
+    // Compact styles
+    const compactInputClasses = "block w-full px-1 py-0.5 border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 rounded-sm bg-white h-7";
+    const compactSelectClasses = "block px-1 py-0.5 border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 rounded-sm bg-white h-7";
+    const cellClasses = "py-1 px-1 border-r border-b border-gray-300 align-middle";
 
     useEffect(() => {
         setEditedProduct(product);
+        if (roleKey) {
+            setTierPrice(product.priceTiers?.[roleKey]?.toString() || '');
+        }
         setIsDirty(false);
-    }, [product]);
+    }, [product, roleKey]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -146,26 +159,21 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         setIsDirty(true);
     };
 
+    const handleTierPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setTierPrice(e.target.value);
+        setIsDirty(true);
+    }
+
     const handleUspPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        const uspKey = name.replace('Price', '') as 'usp1';
-
         setEditedProduct(prev => ({ ...prev, [name]: value === '' ? undefined : parseFloat(value) }));
         setIsDirty(true);
-        
-        // Switch to manual mode on typing if it's not already
-        const propName = `${uspKey}UseGlobalMarkup` as const;
-        if (editedProduct[propName] !== false) {
-             const newFlags = { usp1UseGlobalMarkup: false }; // simplified for now
-             setEditedProduct(prev => ({ ...prev, ...newFlags }));
-        }
     };
 
     const handlePriceOverrideChange = (portion: 'half' | 'quarter', value: string) => {
         const numValue = value === '' ? undefined : parseFloat(value);
         setEditedProduct(prev => {
             const newOverrides = { ...prev.priceOverridesPerUnit, [portion]: numValue };
-            // Clean up undefined keys
             if (numValue === undefined) {
                 delete newOverrides[portion];
             }
@@ -225,8 +233,11 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const handleSave = () => {
         if (!isDirty) return;
         
+        // General updates
         onUpdateDetails(product.id, { name: editedProduct.name, description: editedProduct.description, unit: editedProduct.unit, packaging: editedProduct.packaging });
-        onUpdatePrices(product.id, { pricePerUnit: editedProduct.pricePerUnit, priceOverridesPerUnit: editedProduct.priceOverridesPerUnit });
+        onUpdateUnitValue(product.id, editedProduct.unitValue);
+        onUpdateCategories(product.id, editedProduct.categories);
+        onUpdateVisibility(product.id, editedProduct.visibleToRoles || []);
         onUpdateUspPrices(product.id, {
             costPrice: editedProduct.costPrice,
             usp1Price: editedProduct.usp1Price,
@@ -234,18 +245,29 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         onUpdateUspMarkupFlags(product.id, {
             usp1UseGlobalMarkup: editedProduct.usp1UseGlobalMarkup,
         });
-        onUpdateUnitValue(product.id, editedProduct.unitValue);
-        onUpdateCategories(product.id, editedProduct.categories);
-        onUpdateVisibility(product.id, editedProduct.visibleToRoles || []);
-        
-        const originalPortions = new Set(product.allowedPortions);
-        const newPortions = new Set(editedProduct.allowedPortions);
 
-        if (originalPortions.has('half') !== newPortions.has('half')) {
-            onUpdatePortions(product.id, 'half');
-        }
-        if (originalPortions.has('quarter') !== newPortions.has('quarter')) {
-            onUpdatePortions(product.id, 'quarter');
+        // Price updates
+        if (roleKey && onUpdatePriceTiers) {
+            const newPrice = tierPrice === '' ? undefined : parseFloat(tierPrice);
+            const newTiers = { ...product.priceTiers };
+            if (newPrice !== undefined && !isNaN(newPrice)) {
+                newTiers[roleKey] = newPrice;
+            } else {
+                delete newTiers[roleKey];
+            }
+            onUpdatePriceTiers(product.id, newTiers);
+        } else {
+            onUpdatePrices(product.id, { pricePerUnit: editedProduct.pricePerUnit, priceOverridesPerUnit: editedProduct.priceOverridesPerUnit });
+            
+            const originalPortions = new Set(product.allowedPortions);
+            const newPortions = new Set(editedProduct.allowedPortions);
+
+            if (originalPortions.has('half') !== newPortions.has('half')) {
+                onUpdatePortions(product.id, 'half');
+            }
+            if (originalPortions.has('quarter') !== newPortions.has('quarter')) {
+                onUpdatePortions(product.id, 'quarter');
+            }
         }
 
         setIsDirty(false);
@@ -255,12 +277,15 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
 
     const handleReset = () => {
         setEditedProduct(product);
+        if (roleKey) {
+            setTierPrice(product.priceTiers?.[roleKey]?.toString() || '');
+        }
         setIsDirty(false);
     };
 
     const handleDeleteImage = (indexToDelete: number) => {
         if (product.imageUrls.length <= 1) {
-            alert('Нельзя удалить последнее изображение товара.');
+            alert('Нельзя удалить последнее изображение.');
             return;
         }
         const newImageUrls = product.imageUrls.filter((_, index) => index !== indexToDelete);
@@ -336,7 +361,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
             setIsCameraActive(true);
         } catch (err) {
             console.error("Error accessing camera:", err);
-            alert("Не удалось получить доступ к камере. Проверьте разрешения в браузере.");
+            alert("Не удалось получить доступ к камере.");
         }
     };
     
@@ -378,9 +403,9 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const getStatusInfo = () => {
         switch (product.status) {
             case ProductStatus.Available: return { Icon: StopIcon, color: 'text-green-500', label: 'Доступен' };
-            case ProductStatus.OutOfStock: return { Icon: StopIcon, color: 'text-orange-500', label: 'Нет в наличии' };
+            case ProductStatus.OutOfStock: return { Icon: StopIcon, color: 'text-orange-500', label: 'Нет' };
             case ProductStatus.Hidden: return { Icon: EyeIcon, color: 'text-red-500', label: 'Скрыт' };
-            default: return { Icon: StopIcon, color: 'text-gray-400', label: 'Неизвестно' };
+            default: return { Icon: StopIcon, color: 'text-gray-400', label: '?' };
         }
     };
 
@@ -389,49 +414,47 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     // Map content for each cell type
     const cells: Record<string, React.ReactNode> = {
         status: (
-            <td key="status" className="py-2 px-2 text-center">
-                <button onClick={() => onCycleStatus(product.id)} className={`p-1 rounded-full hover:bg-gray-200 ${StatusInfo.color}`} title={StatusInfo.label}>
-                    <StatusInfo.Icon className="w-5 h-5"/>
+            <td key="status" className={`${cellClasses} text-center`}>
+                <button onClick={() => onCycleStatus(product.id)} className={`p-1 rounded hover:bg-gray-200 ${StatusInfo.color}`} title={StatusInfo.label}>
+                    <StatusInfo.Icon className="w-4 h-4"/>
                 </button>
             </td>
         ),
         photo: (
-            <td key="photo" className="py-2 px-2 align-top">
-                <div className="relative">
-                    <button onClick={() => setImageEditorOpen(o => !o)} className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-md">
-                        <img src={product.imageUrls[0]} alt={product.name} className="w-12 h-12 object-cover rounded-md" />
+            <td key="photo" className={`${cellClasses} text-center`}>
+                <div className="relative inline-block">
+                    <button onClick={() => setImageEditorOpen(o => !o)} className="focus:outline-none">
+                        <img src={product.imageUrls[0]} alt="img" className="w-8 h-8 object-cover rounded-sm border border-gray-200" />
                     </button>
                     {isImageEditorOpen && (
-                        <div ref={imageEditorRef} className="absolute z-10 mt-2 w-72 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                        <div ref={imageEditorRef} className="absolute z-10 mt-1 w-64 bg-white border border-gray-300 rounded shadow-lg p-2 left-0">
                             {isCameraActive ? (
                                 <div className="flex flex-col items-center gap-2">
-                                    <video ref={videoRef} autoPlay playsInline className="w-full h-48 object-cover rounded-lg bg-black"></video>
-                                    <div className="flex gap-2">
-                                        <button onClick={handleTakePicture} className="px-3 py-1.5 text-xs bg-green-500 text-white rounded-lg">Сделать снимок</button>
-                                        <button onClick={stopCamera} className="px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg">Отмена</button>
+                                    <video ref={videoRef} autoPlay playsInline className="w-full h-32 object-cover bg-black"></video>
+                                    <div className="flex gap-1">
+                                        <button onClick={handleTakePicture} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Снять</button>
+                                        <button onClick={stopCamera} className="px-2 py-1 text-xs bg-red-500 text-white rounded">Отмена</button>
                                     </div>
                                 </div>
                             ) : (
                                 <>
-                                    <div className="flex space-x-2 overflow-x-auto pb-2">
+                                    <div className="flex space-x-1 overflow-x-auto pb-1 mb-1">
                                         {product.imageUrls.map((url, index) => (
                                            <div key={index} className="relative flex-shrink-0 group">
-                                             <img src={url} alt={`${product.name} photo ${index + 1}`} className="h-24 object-cover rounded-lg"/>
-                                             <button onClick={() => handleDeleteImage(index)} className="absolute top-1 right-1 bg-black bg-opacity-60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100" aria-label={`Удалить изображение ${index + 1}`}>
-                                                 <TrashIcon className="w-4 h-4" />
+                                             <img src={url} alt={`img ${index}`} className="h-16 w-16 object-cover border"/>
+                                             <button onClick={() => handleDeleteImage(index)} className="absolute top-0 right-0 bg-black bg-opacity-50 text-white p-0.5 opacity-0 group-hover:opacity-100">
+                                                 <TrashIcon className="w-3 h-3" />
                                              </button>
                                            </div>
                                         ))}
                                     </div>
-                                    <div className="flex gap-2 justify-center pt-2 border-t mt-2">
+                                    <div className="flex gap-1 justify-center">
                                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" multiple className="hidden" />
-                                       <button onClick={handleAddFromFileClick} className="flex items-center gap-1.5 px-2 py-1.5 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-                                            <PlusIcon className="w-4 h-4" />
-                                            <span>Фото</span>
+                                       <button onClick={handleAddFromFileClick} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
+                                            + Фото
                                        </button>
-                                       <button onClick={handleOpenCamera} className="flex items-center gap-1.5 px-2 py-1.5 text-xs bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors">
-                                            <CameraIcon className="w-4 h-4" />
-                                            <span>Снимок</span>
+                                       <button onClick={handleOpenCamera} className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">
+                                            Камера
                                        </button>
                                     </div>
                                 </>
@@ -442,30 +465,27 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                 </div>
             </td>
         ),
-        name: <td key="name" className="py-2 px-2"><input type="text" name="name" value={editedProduct.name} onChange={handleGenericChange} className={baseInputClasses} /></td>,
-        description: <td key="description" className="py-2 px-2"><textarea name="description" value={editedProduct.description} onChange={handleGenericChange} rows={2} className={baseInputClasses} /></td>,
+        name: <td key="name" className={cellClasses}><input type="text" name="name" value={editedProduct.name} onChange={handleGenericChange} className={compactInputClasses} /></td>,
+        description: <td key="description" className={cellClasses}><textarea name="description" value={editedProduct.description} onChange={handleGenericChange} rows={1} className={`${compactInputClasses} h-full min-h-[1.75rem] resize-none overflow-hidden hover:overflow-auto`} /></td>,
         categories: (
-            <td key="categories" className="py-2 px-2 align-top">
-                <div className="relative">
-                    <div className="flex flex-wrap gap-1 items-center">
-                        {editedProduct.categories.slice(0, 2).map(c => <span key={c} className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded-full">{c}</span>)}
-                        {editedProduct.categories.length > 2 && <span className="text-xs font-semibold text-gray-500">+{editedProduct.categories.length - 2}</span>}
-                        <button onClick={() => setCategoryPopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline ml-1">Изм.</button>
-                    </div>
+            <td key="categories" className={cellClasses}>
+                <div className="relative h-full flex items-center">
+                    <button onClick={() => setCategoryPopoverOpen(o => !o)} className="text-xs text-left w-full truncate px-1 hover:text-indigo-600">
+                        {editedProduct.categories.length > 0 ? editedProduct.categories.join(', ') : <span className="text-gray-400">Нет</span>}
+                    </button>
                      {isCategoryPopoverOpen && (
-                        <div ref={categoryEditorRef} className="absolute z-10 mt-2 w-64 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Категории</label>
-                            <div className="space-y-1 max-h-32 overflow-y-auto mb-2 pr-1">
+                        <div ref={categoryEditorRef} className="absolute z-10 mt-1 w-56 bg-white border border-gray-300 rounded shadow-lg p-2 top-full left-0">
+                            <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2">
                                 {allPossibleCategories.map(cat => (
                                     <div key={cat} className="flex items-center">
-                                        <input id={`table-cat-${product.id}-${cat}`} type="checkbox" checked={editedProduct.categories.includes(cat)} onChange={() => handleCategoryToggle(cat)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/>
-                                        <label htmlFor={`table-cat-${product.id}-${cat}`} className="ml-2 block text-xs text-gray-900">{cat}</label>
+                                        <input id={`table-cat-${product.id}-${cat}`} type="checkbox" checked={editedProduct.categories.includes(cat)} onChange={() => handleCategoryToggle(cat)} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/>
+                                        <label htmlFor={`table-cat-${product.id}-${cat}`} className="ml-1.5 block text-xs text-gray-900">{cat}</label>
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-2 flex items-center gap-1">
-                                <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => {if(e.key === 'Enter'){e.preventDefault(); handleAddNewCategory()}}} placeholder="Новая категория" className={`${baseInputClasses} text-xs py-1`}/>
-                                <button type="button" onClick={handleAddNewCategory} className="px-2 py-1 bg-gray-200 text-xs font-medium rounded-md hover:bg-gray-300 flex-shrink-0">OK</button>
+                            <div className="flex items-center gap-1">
+                                <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => {if(e.key === 'Enter'){e.preventDefault(); handleAddNewCategory()}}} placeholder="Категория" className="block w-full px-1 py-0.5 border border-gray-300 rounded text-xs"/>
+                                <button type="button" onClick={handleAddNewCategory} className="px-1 py-0.5 bg-gray-200 text-xs rounded hover:bg-gray-300">+</button>
                             </div>
                         </div>
                     )}
@@ -473,19 +493,18 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
             </td>
         ),
         visibility: (
-            <td key="visibility" className="py-2 px-2 align-top">
-                <div className="relative">
-                    <button onClick={() => setRolePopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline border border-dashed border-gray-300 px-2 py-1 rounded">
+            <td key="visibility" className={cellClasses}>
+                <div className="relative h-full flex items-center">
+                    <button onClick={() => setRolePopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline px-1 truncate w-full text-left">
                         {!editedProduct.visibleToRoles || editedProduct.visibleToRoles.length === 0 
-                            ? 'Все роли' 
+                            ? 'Все' 
                             : `${editedProduct.visibleToRoles.length} ролей`
                         }
                     </button>
                     {isRolePopoverOpen && (
-                        <div ref={roleEditorRef} className="absolute z-10 mt-2 w-48 bg-white border border-gray-300 rounded-lg shadow-lg p-3 left-0">
-                            <label className="block text-xs font-medium text-gray-700 mb-2">Отображать для:</label>
-                            <div className="space-y-1 max-h-48 overflow-y-auto">
-                                <div className="text-xs text-gray-500 mb-2 italic">Если ничего не выбрано — видно всем.</div>
+                        <div ref={roleEditorRef} className="absolute z-10 mt-1 w-40 bg-white border border-gray-300 rounded shadow-lg p-2 left-0">
+                            <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                                <div className="text-[10px] text-gray-500 mb-1 italic">Пусто = всем</div>
                                 {roles.map(role => (
                                     <div key={role} className="flex items-center">
                                         <input 
@@ -493,9 +512,9 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                                             type="checkbox" 
                                             checked={(editedProduct.visibleToRoles || []).includes(role)} 
                                             onChange={() => handleRoleToggle(role)} 
-                                            className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                            className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
                                         />
-                                        <label htmlFor={`role-${product.id}-${role}`} className="ml-2 block text-xs text-gray-900 capitalize">{role}</label>
+                                        <label htmlFor={`role-${product.id}-${role}`} className="ml-1.5 block text-xs text-gray-900 truncate">{role}</label>
                                     </div>
                                 ))}
                             </div>
@@ -505,76 +524,105 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
             </td>
         ),
         price: (
-            <td key="price" className="py-2 px-2">
-                <input type="number" name="pricePerUnit" value={editedProduct.pricePerUnit} onChange={handleNumberChange} className={`${baseInputClasses} mb-1`} />
-                <select name="unit" value={editedProduct.unit} onChange={handleGenericChange} className={baseInputClasses}>
-                    {unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}
-                </select>
+            <td key="price" className={cellClasses}>
+                {roleKey ? (
+                    <div className="flex flex-col h-full justify-center">
+                        <input 
+                            type="number" 
+                            value={tierPrice} 
+                            onChange={handleTierPriceChange} 
+                            className={`${compactInputClasses} bg-yellow-50`}
+                            placeholder="-"
+                        />
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1 h-full">
+                        <input 
+                            type="number" 
+                            name="pricePerUnit" 
+                            value={editedProduct.pricePerUnit} 
+                            onChange={handleNumberChange} 
+                            className={compactInputClasses} 
+                        />
+                        <select 
+                            name="unit" 
+                            value={editedProduct.unit} 
+                            onChange={handleGenericChange} 
+                            className={`${compactSelectClasses} w-16`}
+                        >
+                            {unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}
+                        </select>
+                    </div>
+                )}
             </td>
         ),
         value: (
-            <td key="value" className="py-2 px-2">
-                <input type="number" step="0.01" name="unitValue" value={editedProduct.unitValue} onChange={handleNumberChange} className={`${baseInputClasses} mb-1`} />
-                <select name="packaging" value={editedProduct.packaging} onChange={handleGenericChange} className={baseInputClasses}>
-                    {packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}
-                </select>
+            <td key="value" className={cellClasses}>
+                <div className="flex items-center gap-1 h-full">
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        name="unitValue" 
+                        value={editedProduct.unitValue} 
+                        onChange={handleNumberChange} 
+                        className={compactInputClasses} 
+                    />
+                    <select 
+                        name="packaging" 
+                        value={editedProduct.packaging} 
+                        onChange={handleGenericChange} 
+                        className={`${compactSelectClasses} w-20`}
+                    >
+                        {packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}
+                    </select>
+                </div>
             </td>
         ),
         portions: (
-            <td key="portions" className="py-2 px-2">
-                 {editedProduct.unit === 'kg' ? (
-                     <div className="space-y-2">
-                        <div className="flex items-center"><input id={`half-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('half')} onChange={() => handlePortionToggle('half')} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/><label htmlFor={`half-${product.id}`} className="ml-2 text-sm text-gray-900">Половинка</label></div>
-                        <div className="flex items-center"><input id={`quarter-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('quarter')} onChange={() => handlePortionToggle('quarter')} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/><label htmlFor={`quarter-${product.id}`} className="ml-2 text-sm text-gray-900">Четверть</label></div>
+            <td key="portions" className={`${cellClasses} text-xs`}>
+                 {editedProduct.unit === 'kg' && !roleKey ? (
+                     <div className="flex flex-col gap-0.5 justify-center h-full">
+                        <div className="flex items-center"><input id={`half-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('half')} onChange={() => handlePortionToggle('half')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`half-${product.id}`} className="ml-1">1/2</label></div>
+                        <div className="flex items-center"><input id={`quarter-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('quarter')} onChange={() => handlePortionToggle('quarter')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`quarter-${product.id}`} className="ml-1">1/4</label></div>
                      </div>
-                 ) : <span className="text-xs text-gray-400">N/A</span>}
+                 ) : <span className="text-gray-300">-</span>}
             </td>
         ),
         special: (
-            <td key="special" className="py-2 px-2">
-                {editedProduct.unit === 'kg' ? (
-                    <div className="space-y-1">
-                        <div>
-                            <label className="text-xs text-gray-600">₽/кг (1/2)</label>
-                            <input type="number" value={editedProduct.priceOverridesPerUnit?.half ?? ''} onChange={e => handlePriceOverrideChange('half', e.target.value)} placeholder={editedProduct.pricePerUnit.toString()} className={baseInputClasses}/>
-                        </div>
-                        <div>
-                            <label className="text-xs text-gray-600">₽/кг (1/4)</label>
-                            <input type="number" value={editedProduct.priceOverridesPerUnit?.quarter ?? ''} onChange={e => handlePriceOverrideChange('quarter', e.target.value)} placeholder={editedProduct.pricePerUnit.toString()} className={baseInputClasses}/>
-                        </div>
+            <td key="special" className={cellClasses}>
+                {editedProduct.unit === 'kg' && !roleKey ? (
+                    <div className="flex flex-col gap-1 justify-center h-full">
+                        <input type="number" value={editedProduct.priceOverridesPerUnit?.half ?? ''} onChange={e => handlePriceOverrideChange('half', e.target.value)} placeholder="1/2" className={`${compactInputClasses} h-6`} title="Цена за кг (1/2)"/>
+                        <input type="number" value={editedProduct.priceOverridesPerUnit?.quarter ?? ''} onChange={e => handlePriceOverrideChange('quarter', e.target.value)} placeholder="1/4" className={`${compactInputClasses} h-6`} title="Цена за кг (1/4)"/>
                     </div>
-                ) : <span className="text-xs text-gray-400">N/A</span>}
+                ) : <span className="text-gray-300 text-center block">-</span>}
             </td>
         ),
-        cost: <td key="cost" className="py-2 px-2"><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={baseInputClasses} placeholder="-" /></td>,
+        cost: <td key="cost" className={cellClasses}><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={compactInputClasses} placeholder="-" /></td>,
         actions: (
-            <td key="actions" className="py-2 px-2 text-center align-top">
-                <div className="flex items-center justify-center gap-2 h-full">
-                    <div className="flex-grow">
-                        <button onClick={handleSave} disabled={!isDirty} className="w-full px-2 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                            Сохранить
-                        </button>
-                        {showSaved && <span className="text-xs text-green-600 block mt-1">✓ Сохр.</span>}
-                    </div>
+            <td key="actions" className={`${cellClasses} text-center`}>
+                <div className="flex items-center justify-center gap-1 h-full">
+                    <button onClick={handleSave} disabled={!isDirty} className="px-2 py-1 text-[10px] font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                        Сохр.
+                    </button>
                     <div className="relative" ref={actionsMenuRef}>
-                        <button onClick={() => setActionsMenuOpen(o => !o)} className="p-1 text-gray-500 hover:bg-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <MoreIcon className="w-5 h-5" />
+                        <button onClick={() => setActionsMenuOpen(o => !o)} className="p-0.5 text-gray-500 hover:bg-gray-200 rounded">
+                            <MoreIcon className="w-4 h-4" />
                         </button>
                         {isActionsMenuOpen && (
-                            <div className="absolute right-0 bottom-full mb-2 w-36 bg-white rounded-md shadow-lg z-20 border py-1">
+                            <div className="absolute right-0 bottom-full mb-1 w-32 bg-white rounded shadow-lg border z-20 py-1 text-xs">
                                 <button
                                     onClick={() => { handleReset(); setActionsMenuOpen(false); }}
                                     disabled={!isDirty}
-                                    className="w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full text-left px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                                 >
-                                    Сбросить
+                                    Сброс
                                 </button>
-                                <div className="border-t my-1"></div>
                                 <button
                                     onClick={() => { onDeleteProduct(product.id); setActionsMenuOpen(false); }}
-                                    className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+                                    className="w-full text-left px-2 py-1 text-red-600 hover:bg-red-50"
                                 >
-                                    Удалить товар
+                                    Удалить
                                 </button>
                             </div>
                         )}
@@ -585,7 +633,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     };
 
     return (
-        <tr className={`border-b transition-colors duration-300 ${isDirty ? 'bg-yellow-50' : 'bg-white'} hover:bg-gray-50`}>
+        <tr className={`transition-colors hover:bg-gray-50 ${isDirty ? 'bg-yellow-50' : ''}`}>
             {columnOrder.map(colKey => cells[colKey] || null)}
         </tr>
     );

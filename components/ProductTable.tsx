@@ -11,6 +11,7 @@ interface ProductTableProps {
     onCycleStatus: (productId: string) => void;
     onUpdatePortions: (productId: string, portion: ProductPortion) => void;
     onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
+    onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // Added prop
     onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
     onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
@@ -23,21 +24,22 @@ interface ProductTableProps {
     onApplyMarkups: () => void;
     roles?: string[];
     visibleColumns?: string[];
+    roleKey?: string; // Added prop to filter/edit specific role prices
 }
 
 const DEFAULT_WIDTHS: Record<string, number> = {
-    status: 70,
-    photo: 80,
+    status: 50,
+    photo: 60,
     name: 200,
     description: 250,
-    categories: 200,
-    visibility: 150,
-    price: 150,
-    value: 150,
-    portions: 180,
-    special: 180,
-    cost: 120,
-    actions: 160
+    categories: 180,
+    visibility: 140,
+    price: 180,
+    value: 180,
+    portions: 160,
+    special: 160,
+    cost: 100,
+    actions: 140
 };
 
 const DEFAULT_ORDER = [
@@ -52,11 +54,11 @@ const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
     description: "Описание",
     categories: "Категории",
     visibility: "Видимость",
-    price: "Цена / Ед.Изм.",
-    value: "Значение / Вид",
-    portions: "Порции (для кг)",
-    special: "Спец. цены (для кг)",
-    cost: "Себест., ₽",
+    price: "Цена / Ед.",
+    value: "Вес / Вид",
+    portions: "Порции (кг)",
+    special: "Спец. цены",
+    cost: "Себест.",
     actions: <span>Действия</span>
 };
 
@@ -66,7 +68,7 @@ const ResizeIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, visibleColumns, ...propsForRow }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, visibleColumns, roleKey, onUpdatePriceTiers, ...propsForRow }) => {
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
     const [colOrder, setColOrder] = useState<string[]>(DEFAULT_ORDER);
     const [draggedCol, setDraggedCol] = useState<string | null>(null);
@@ -134,6 +136,17 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
         return colOrder.filter(key => visibleColumns.includes(key));
     }, [colOrder, visibleColumns]);
 
+    // Customize labels if roleKey is present
+    const dynamicColumnLabels = useMemo(() => {
+        if (!roleKey) return COLUMN_LABELS;
+        return {
+            ...COLUMN_LABELS,
+            price: <span className="text-indigo-700 font-bold">Цена ({roleKey})</span>,
+            portions: <span className="text-gray-400">Порции</span>,
+            special: <span className="text-gray-400">Спец.</span>
+        };
+    }, [roleKey]);
+
     // --- Desktop Resize Logic ---
     const handleResizeMouseDown = (e: React.MouseEvent, key: string) => {
         e.preventDefault();
@@ -143,7 +156,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
 
         const handleMouseMove = (moveEvent: MouseEvent) => {
             const delta = moveEvent.pageX - startX;
-            const newWidth = Math.max(50, startWidth + delta);
+            const newWidth = Math.max(30, startWidth + delta);
             setColWidths(prev => ({ ...prev, [key]: newWidth }));
         };
 
@@ -206,7 +219,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
             setDraggedCol(key);
             setGhostState({
                 key,
-                label: COLUMN_LABELS[key],
+                label: dynamicColumnLabels[key],
                 width: rect.width,
                 height: rect.height,
                 startX: rect.left,
@@ -275,13 +288,13 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
     };
 
     return (
-        <div className="overflow-x-auto relative shadow-md sm:rounded-lg border border-gray-200 pb-32 sm:pb-0 select-none"> 
+        <div className="overflow-x-auto relative shadow-none rounded-none border border-gray-300 pb-32 sm:pb-0 select-none"> 
             
             {/* Ghost Element for Dragging */}
             {ghostState && (
                 <div 
                     ref={ghostRef}
-                    className="fixed z-50 bg-indigo-600 text-white shadow-2xl rounded-lg flex items-center justify-center font-bold text-sm pointer-events-none border-2 border-indigo-400 opacity-90"
+                    className="fixed z-50 bg-indigo-600 text-white shadow-2xl rounded-lg flex items-center justify-center font-bold text-xs pointer-events-none border-2 border-indigo-400 opacity-90"
                     style={{
                         width: ghostState.width,
                         height: ghostState.height,
@@ -296,8 +309,8 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                 </div>
             )}
 
-            <table className="w-full text-sm text-left text-gray-500" ref={tableRef} style={{ tableLayout: 'fixed' }}>
-                <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-20 shadow-sm">
+            <table className="w-full text-xs text-left text-gray-500 border-collapse border border-gray-300" ref={tableRef} style={{ tableLayout: 'fixed' }}>
+                <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-20">
                     <tr>
                         {effectiveColumnOrder.map(key => (
                              <th 
@@ -312,27 +325,27 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                                 onTouchMove={handleTouchMove}
                                 onTouchEnd={handleTouchEnd}
                                 className={`
-                                    py-3 px-2 relative group select-none border-b border-gray-200 transition-all duration-200 cursor-grab active:cursor-grabbing
+                                    py-1 px-1 relative group select-none border-r border-b border-gray-300 bg-gray-100 transition-all duration-200 cursor-grab active:cursor-grabbing text-center align-middle h-10
                                     ${draggedCol === key 
-                                        ? 'bg-indigo-50 border-2 border-dashed border-indigo-300 text-transparent opacity-50' 
-                                        : 'bg-gray-100 hover:bg-gray-200'
+                                        ? 'bg-indigo-50 border-indigo-300 text-transparent opacity-50' 
+                                        : 'hover:bg-gray-200'
                                     }
                                 `}
                                 style={{ width: `${colWidths[key]}px`, minWidth: `${colWidths[key]}px` }}
                             >
-                                <div className={`flex items-center justify-between pointer-events-none ${draggedCol === key ? 'invisible' : ''}`}>
-                                    <span className="truncate mr-1">{COLUMN_LABELS[key]}</span>
+                                <div className={`flex items-center justify-center pointer-events-none ${draggedCol === key ? 'invisible' : ''}`}>
+                                    <span className="truncate">{dynamicColumnLabels[key]}</span>
                                     
                                     {/* Mobile Resize Button */}
                                     <button 
-                                        className="resize-btn pointer-events-auto p-1.5 rounded-full hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors"
+                                        className="resize-btn pointer-events-auto p-1 ml-1 rounded hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors sm:hidden"
                                         onClick={(e) => {
                                             e.stopPropagation(); // Prevent drag start
                                             setActiveResizeMenu(activeResizeMenu === key ? null : key);
                                         }}
                                         title="Изменить ширину"
                                     >
-                                        <ResizeIcon className="w-4 h-4" />
+                                        <ResizeIcon className="w-3 h-3" />
                                     </button>
                                 </div>
 
@@ -351,9 +364,9 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                                             </label>
                                             <input 
                                                 type="range" 
-                                                min="50" 
+                                                min="30" 
                                                 max="600" 
-                                                step="10"
+                                                step="5"
                                                 value={colWidths[key]} 
                                                 onChange={(e) => handleSliderChange(key, e.target.value)}
                                                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
@@ -378,13 +391,15 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                         ))}
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="bg-white">
                     {products.map(product => (
                         <ProductTableRow 
                             key={product.id}
                             product={product}
                             roles={roles}
                             columnOrder={effectiveColumnOrder}
+                            roleKey={roleKey}
+                            onUpdatePriceTiers={onUpdatePriceTiers}
                             {...propsForRow}
                         />
                     ))}

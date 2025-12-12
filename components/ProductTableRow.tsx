@@ -16,7 +16,8 @@ interface ProductTableRowProps {
     onUpdateCategories: (productId: string, newCategories: string[]) => void;
     onUpdateImages: (productId: string, newImageUrls: string[]) => void;
     onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
-    roles?: string[]; // Optional to support legacy/default behavior if not passed
+    roles?: string[];
+    columnOrder?: string[]; // Новый проп для порядка колонок
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -62,7 +63,23 @@ const MoreIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategories, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUspPrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateCategories, onUpdateImages, onUpdateVisibility, roles = [] }) => {
+const ProductTableRow: React.FC<ProductTableRowProps> = ({ 
+    product, 
+    allCategories, 
+    onDeleteProduct, 
+    onCycleStatus, 
+    onUpdatePortions, 
+    onUpdatePrices, 
+    onUpdateUspPrices, 
+    onUpdateUspMarkupFlags, 
+    onUpdateUnitValue, 
+    onUpdateDetails, 
+    onUpdateCategories, 
+    onUpdateImages, 
+    onUpdateVisibility, 
+    roles = [],
+    columnOrder = ['status', 'photo', 'name', 'description', 'categories', 'visibility', 'price', 'value', 'portions', 'special', 'cost', 'actions']
+}) => {
     const [editedProduct, setEditedProduct] = useState(product);
     const [newCategory, setNewCategory] = useState('');
     const [isDirty, setIsDirty] = useState(false);
@@ -129,12 +146,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         setIsDirty(true);
     };
 
-    const handleMarkupTypeChange = (uspKey: 'usp1', useGlobal: boolean) => {
-        const propName = `${uspKey}UseGlobalMarkup` as const;
-        setEditedProduct(prev => ({ ...prev, [propName]: useGlobal }));
-        setIsDirty(true);
-    };
-
     const handleUspPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         const uspKey = name.replace('Price', '') as 'usp1';
@@ -145,7 +156,8 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         // Switch to manual mode on typing if it's not already
         const propName = `${uspKey}UseGlobalMarkup` as const;
         if (editedProduct[propName] !== false) {
-             handleMarkupTypeChange(uspKey, false);
+             const newFlags = { usp1UseGlobalMarkup: false }; // simplified for now
+             setEditedProduct(prev => ({ ...prev, ...newFlags }));
         }
     };
 
@@ -265,7 +277,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; // Resize to reasonable max width
+                    const MAX_WIDTH = 800;
                     const MAX_HEIGHT = 800;
                     let width = img.width;
                     let height = img.height;
@@ -286,7 +298,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.drawImage(img, 0, 0, width, height);
-                        // Compress to JPEG 0.7 quality
                         resolve(canvas.toDataURL('image/jpeg', 0.7));
                     } else {
                         reject(new Error("Canvas context missing"));
@@ -302,7 +313,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         if (event.target.files) {
             const files = Array.from(event.target.files);
             try {
-                // Changed from fileToBase64 to compressImage
                 const base64Promises = files.map(compressImage);
                 const newBase64Urls = await Promise.all(base64Promises);
                 onUpdateImages(product.id, [...product.imageUrls, ...newBase64Urls]);
@@ -343,8 +353,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        
-        // Cap resolution
         const MAX_DIM = 1000;
         let w = video.videoWidth;
         let h = video.videoHeight;
@@ -367,7 +375,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
         stopCamera();
     };
 
-    
     const getStatusInfo = () => {
         switch (product.status) {
             case ProductStatus.Available: return { Icon: StopIcon, color: 'text-green-500', label: 'Доступен' };
@@ -379,14 +386,17 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
 
     const StatusInfo = getStatusInfo();
 
-    return (
-        <tr className={`border-b transition-colors duration-300 ${isDirty ? 'bg-yellow-50' : 'bg-white'} hover:bg-gray-50`}>
-            <td className="py-2 px-2 text-center">
+    // Map content for each cell type
+    const cells: Record<string, React.ReactNode> = {
+        status: (
+            <td key="status" className="py-2 px-2 text-center">
                 <button onClick={() => onCycleStatus(product.id)} className={`p-1 rounded-full hover:bg-gray-200 ${StatusInfo.color}`} title={StatusInfo.label}>
                     <StatusInfo.Icon className="w-5 h-5"/>
                 </button>
             </td>
-            <td className="py-2 px-2 align-top">
+        ),
+        photo: (
+            <td key="photo" className="py-2 px-2 align-top">
                 <div className="relative">
                     <button onClick={() => setImageEditorOpen(o => !o)} className="focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-md">
                         <img src={product.imageUrls[0]} alt={product.name} className="w-12 h-12 object-cover rounded-md" />
@@ -431,9 +441,11 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     )}
                 </div>
             </td>
-            <td className="py-2 px-2"><input type="text" name="name" value={editedProduct.name} onChange={handleGenericChange} className={baseInputClasses} /></td>
-            <td className="py-2 px-2"><textarea name="description" value={editedProduct.description} onChange={handleGenericChange} rows={2} className={baseInputClasses} /></td>
-            <td className="py-2 px-2 align-top">
+        ),
+        name: <td key="name" className="py-2 px-2"><input type="text" name="name" value={editedProduct.name} onChange={handleGenericChange} className={baseInputClasses} /></td>,
+        description: <td key="description" className="py-2 px-2"><textarea name="description" value={editedProduct.description} onChange={handleGenericChange} rows={2} className={baseInputClasses} /></td>,
+        categories: (
+            <td key="categories" className="py-2 px-2 align-top">
                 <div className="relative">
                     <div className="flex flex-wrap gap-1 items-center">
                         {editedProduct.categories.slice(0, 2).map(c => <span key={c} className="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded-full">{c}</span>)}
@@ -459,7 +471,9 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     )}
                 </div>
             </td>
-            <td className="py-2 px-2 align-top">
+        ),
+        visibility: (
+            <td key="visibility" className="py-2 px-2 align-top">
                 <div className="relative">
                     <button onClick={() => setRolePopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline border border-dashed border-gray-300 px-2 py-1 rounded">
                         {!editedProduct.visibleToRoles || editedProduct.visibleToRoles.length === 0 
@@ -489,19 +503,25 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     )}
                 </div>
             </td>
-            <td className="py-2 px-2">
+        ),
+        price: (
+            <td key="price" className="py-2 px-2">
                 <input type="number" name="pricePerUnit" value={editedProduct.pricePerUnit} onChange={handleNumberChange} className={`${baseInputClasses} mb-1`} />
                 <select name="unit" value={editedProduct.unit} onChange={handleGenericChange} className={baseInputClasses}>
                     {unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}
                 </select>
             </td>
-            <td className="py-2 px-2">
+        ),
+        value: (
+            <td key="value" className="py-2 px-2">
                 <input type="number" step="0.01" name="unitValue" value={editedProduct.unitValue} onChange={handleNumberChange} className={`${baseInputClasses} mb-1`} />
                 <select name="packaging" value={editedProduct.packaging} onChange={handleGenericChange} className={baseInputClasses}>
                     {packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}
                 </select>
             </td>
-            <td className="py-2 px-2">
+        ),
+        portions: (
+            <td key="portions" className="py-2 px-2">
                  {editedProduct.unit === 'kg' ? (
                      <div className="space-y-2">
                         <div className="flex items-center"><input id={`half-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('half')} onChange={() => handlePortionToggle('half')} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/><label htmlFor={`half-${product.id}`} className="ml-2 text-sm text-gray-900">Половинка</label></div>
@@ -509,7 +529,9 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                      </div>
                  ) : <span className="text-xs text-gray-400">N/A</span>}
             </td>
-            <td className="py-2 px-2">
+        ),
+        special: (
+            <td key="special" className="py-2 px-2">
                 {editedProduct.unit === 'kg' ? (
                     <div className="space-y-1">
                         <div>
@@ -523,8 +545,10 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     </div>
                 ) : <span className="text-xs text-gray-400">N/A</span>}
             </td>
-            <td className="py-2 px-2"><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={baseInputClasses} placeholder="-" /></td>
-            <td className="py-2 px-2 text-center align-top">
+        ),
+        cost: <td key="cost" className="py-2 px-2"><input type="number" name="costPrice" value={editedProduct.costPrice ?? ''} onChange={handleUspPriceChange} className={baseInputClasses} placeholder="-" /></td>,
+        actions: (
+            <td key="actions" className="py-2 px-2 text-center align-top">
                 <div className="flex items-center justify-center gap-2 h-full">
                     <div className="flex-grow">
                         <button onClick={handleSave} disabled={!isDirty} className="w-full px-2 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -557,6 +581,12 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({ product, allCategorie
                     </div>
                 </div>
             </td>
+        )
+    };
+
+    return (
+        <tr className={`border-b transition-colors duration-300 ${isDirty ? 'bg-yellow-50' : 'bg-white'} hover:bg-gray-50`}>
+            {columnOrder.map(colKey => cells[colKey] || null)}
         </tr>
     );
 };

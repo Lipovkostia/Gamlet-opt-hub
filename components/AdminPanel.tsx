@@ -62,6 +62,21 @@ const BADGE_COLORS = [
     'bg-pink-500', 'bg-rose-500', 'bg-gray-800'
 ];
 
+const TABLE_COLUMNS_OPTIONS = [
+    { key: 'status', label: 'Статус' },
+    { key: 'photo', label: 'Фото' },
+    { key: 'name', label: 'Название' },
+    { key: 'description', label: 'Описание' },
+    { key: 'categories', label: 'Категории' },
+    { key: 'visibility', label: 'Видимость' },
+    { key: 'price', label: 'Цена / Ед.Изм.' },
+    { key: 'value', label: 'Значение / Вид' },
+    { key: 'portions', label: 'Порции' },
+    { key: 'special', label: 'Спец. цены' },
+    { key: 'cost', label: 'Себестоимость' },
+    { key: 'actions', label: 'Действия' },
+];
+
 const CameraIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -140,6 +155,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [tableFilterCategory, setTableFilterCategory] = useState<string | 'all'>('all');
     const [tableFilterStatus, setTableFilterStatus] = useState<ProductStatus | 'all'>('all');
     const [isTableFilterVisible, setIsTableFilterVisible] = useState(false);
+    
+    // Table Column Visibility
+    const [visibleTableColumns, setVisibleTableColumns] = useState<string[]>(TABLE_COLUMNS_OPTIONS.map(c => c.key));
     
     // State for USP markups
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
@@ -318,6 +336,18 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+    
+    const handleToggleTableColumn = (key: string) => {
+        setVisibleTableColumns(prev => {
+            if (prev.includes(key)) {
+                // Prevent hiding all columns
+                if (prev.length <= 1) return prev;
+                return prev.filter(c => c !== key);
+            } else {
+                return [...prev, key];
+            }
+        });
     };
 
     const handleCreateBadge = (e: React.FormEvent) => {
@@ -894,16 +924,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     <div className="mb-4">
                         <button
                             onClick={() => setIsTableFilterVisible(!isTableFilterVisible)}
-                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
                             aria-expanded={isTableFilterVisible}
                             aria-controls="table-filters-panel"
+                            title="Фильтры и поиск"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
-                            </svg>
-                            <span>Фильтры и поиск</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 transition-transform ${isTableFilterVisible ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                             </svg>
                         </button>
                         <div
@@ -948,6 +975,28 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             <option value={ProductStatus.Hidden}>Скрыт</option>
                                         </select>
                                     </div>
+                                    
+                                    {/* Column Selection */}
+                                    <div className="md:col-span-3 pt-4 border-t mt-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Отображаемые столбцы</label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                            {TABLE_COLUMNS_OPTIONS.map((col) => (
+                                                <div key={col.key} className="flex items-center">
+                                                    <input
+                                                        id={`col-toggle-${col.key}`}
+                                                        type="checkbox"
+                                                        checked={visibleTableColumns.includes(col.key)}
+                                                        onChange={() => handleToggleTableColumn(col.key)}
+                                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                                        disabled={visibleTableColumns.length <= 1 && visibleTableColumns.includes(col.key)}
+                                                    />
+                                                    <label htmlFor={`col-toggle-${col.key}`} className="ml-2 text-sm text-gray-600 cursor-pointer select-none">
+                                                        {col.label}
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -971,6 +1020,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         setUspMarkups={setUspMarkups}
                         onApplyMarkups={handleApplyMarkups}
                         roles={roles}
+                        visibleColumns={visibleTableColumns}
                     />
                 </div>
             )}

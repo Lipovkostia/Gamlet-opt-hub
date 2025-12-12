@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Product, ProductPortion, ProductUnit, ProductPackaging, CustomerType } from '../types';
 import ProductTableRow from './ProductTableRow';
 
@@ -22,6 +22,7 @@ interface ProductTableProps {
     setUspMarkups: React.Dispatch<React.SetStateAction<{ usp1: string; }>>;
     onApplyMarkups: () => void;
     roles?: string[];
+    visibleColumns?: string[]; // New prop
 }
 
 const DEFAULT_WIDTHS: Record<string, number> = {
@@ -65,7 +66,7 @@ const ResizeIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, ...propsForRow }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, visibleColumns, ...propsForRow }) => {
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
     const [colOrder, setColOrder] = useState<string[]>(DEFAULT_ORDER);
     const [draggedCol, setDraggedCol] = useState<string | null>(null);
@@ -112,6 +113,12 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
         setColWidths(newWidths);
         localStorage.setItem('productTableColWidths', JSON.stringify(newWidths));
     };
+
+    // Calculate effective columns based on order and visibility filter
+    const effectiveColumnOrder = useMemo(() => {
+        if (!visibleColumns) return colOrder;
+        return colOrder.filter(key => visibleColumns.includes(key));
+    }, [colOrder, visibleColumns]);
 
     // --- Desktop Resize Logic ---
     const handleResizeMouseDown = (e: React.MouseEvent, key: string) => {
@@ -212,7 +219,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
             <table className="w-full text-sm text-left text-gray-500" ref={tableRef} style={{ tableLayout: 'fixed' }}>
                 <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-20 shadow-sm">
                     <tr>
-                        {colOrder.map(key => (
+                        {effectiveColumnOrder.map(key => (
                              <th 
                                 key={key}
                                 scope="col" 
@@ -291,7 +298,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                             key={product.id}
                             product={product}
                             roles={roles}
-                            columnOrder={colOrder}
+                            columnOrder={effectiveColumnOrder}
                             {...propsForRow}
                         />
                     ))}

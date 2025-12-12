@@ -1,11 +1,9 @@
-
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import LandingPage from './components/LandingPage';
 import { AuthProvider } from './contexts/AuthContext';
-import { db } from './lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { db, doc, getDoc } from './lib/firebase';
 
 const RootComponent: React.FC = () => {
     const [shopId, setShopId] = useState<string | null>(null);

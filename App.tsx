@@ -7,10 +7,8 @@ import AuthModal from './components/AuthModal';
 import AccountModal from './components/AccountModal';
 import AdminPage from './components/AdminPanel';
 import ImageGalleryModal from './components/ImageGalleryModal';
-import AIChatModal from './components/AIChatModal';
 import { AuthContext } from './contexts/AuthContext';
-import { db } from './lib/firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { db, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from './lib/firebase';
 
 const INITIAL_CATEGORIES = [
   'Твердые',
@@ -82,12 +80,6 @@ const ImageOffIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-const SparklesIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-    </svg>
-);
-
 interface FlyingItemProps {
   imageUrl: string;
   startRect: DOMRect;
@@ -154,7 +146,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   
   // Registration & Auth State
   const [registrationType, setRegistrationType] = useState<CustomerType | null>(() => {
@@ -744,17 +735,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             </div>
             
           <div className="flex items-center gap-4">
-            {/* AI Chat Button */}
-            {!currentUser?.isAdmin && (
-                <button 
-                    onClick={() => setIsChatOpen(true)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-full hover:bg-indigo-100 transition-colors"
-                >
-                    <SparklesIcon className="w-5 h-5" />
-                    <span className="hidden sm:inline font-medium text-sm">ИИ Помощник</span>
-                </button>
-            )}
-
              {currentUser ? (
                  <div className="flex items-center gap-4">
                     {currentUser.isAdmin && (
@@ -913,14 +893,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             onUpdateDetails={updateUserDetails}
             onChangePassword={changePassword}
           />
-      )}
-      
-      {isChatOpen && (
-        <AIChatModal 
-            products={products}
-            onClose={() => setIsChatOpen(false)}
-            onAddToCart={(product, portion) => handleAddToCart(product, portion, undefined)}
-        />
       )}
 
       {galleryModalInfo && (

@@ -1,8 +1,6 @@
-
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User, CustomerType } from '../types';
-import { db } from '../lib/firebase';
-import { collection, getDocs, addDoc, query, where } from 'firebase/firestore';
+import { db, collection, getDocs, addDoc, query, where } from '../lib/firebase';
 
 const simpleHash = (str: string) => {
     let hash = 0;
@@ -85,7 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, shopId }) 
             try {
                 const usersRef = collection(db, 'shops', shopId, 'users');
                 const snapshot = await getDocs(usersRef);
-                usersData = snapshot.docs.map(doc => ({ ...doc.data() as User, id: doc.id }));
+                usersData = snapshot.docs.map((doc: any) => ({ ...doc.data() as User, id: doc.id }));
             } catch (e) {
                 console.error("Error fetching users from DB", e);
             }

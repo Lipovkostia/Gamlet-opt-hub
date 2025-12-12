@@ -1,7 +1,5 @@
-
 import React, { useState } from 'react';
-import { db } from '../lib/firebase';
-import { collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where } from 'firebase/firestore';
+import { db, collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where } from '../lib/firebase';
 import { User, ProductStatus, Shop } from '../types';
 
 const simpleHash = (str: string) => {
@@ -285,7 +283,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
             const querySnapshot = await getDocs(collection(db, 'shops'));
             
             // Map shops and fetch user count for each
-            const shopsWithCounts = await Promise.all(querySnapshot.docs.map(async (doc) => {
+            const shopsWithCounts = await Promise.all(querySnapshot.docs.map(async (doc: any) => {
                 const shopData = doc.data();
                 const usersColl = collection(db, 'shops', doc.id, 'users');
                 let count = 0;
@@ -321,7 +319,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
         try {
              const usersColl = collection(db, 'shops', shop.id, 'users');
              const snapshot = await getDocs(usersColl);
-             const users = snapshot.docs.map(d => ({...d.data(), id: d.id} as User));
+             const users = snapshot.docs.map((d: any) => ({...d.data(), id: d.id} as User));
              setSelectedShopUsers(users);
         } catch (e) {
             console.error("Error fetching users", e);

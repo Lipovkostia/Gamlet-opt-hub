@@ -1,5 +1,22 @@
-import * as firebaseApp from 'firebase/app';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import * as firestore from 'firebase/firestore';
+
+// Bypass TypeScript errors for missing exports by casting the namespace to any.
+// This handles cases where the environment's type definitions for Firebase might be outdated or mismatched.
+const { 
+    getFirestore, 
+    collection, 
+    doc, 
+    getDoc, 
+    getDocs, 
+    addDoc, 
+    updateDoc, 
+    deleteDoc, 
+    setDoc, 
+    query, 
+    where,
+    getCountFromServer
+} = firestore as any;
 
 const firebaseConfig = {
   apiKey: "AIzaSyBNBtyQmQrxKv6xqAbdboXl0j6tHh2_wPg",
@@ -11,16 +28,27 @@ const firebaseConfig = {
   measurementId: "G-1NY21T37SY"
 };
 
-let db: Firestore | null = null;
+let db: any = null;
 
 try {
-    // Use namespace import and cast to any to avoid "no exported member" error
-    // which can happen with certain TS configurations even when v9 is installed.
-    const app = (firebaseApp as any).initializeApp(firebaseConfig);
+    const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-    console.log("Google Cloud Firestore подключен успешно");
+    console.log("Google Cloud Firestore подключен успешно (Modular Mode)");
 } catch (error) {
     console.error("Ошибка подключения к Firebase:", error);
 }
 
-export { db };
+export { 
+    db, 
+    collection, 
+    doc, 
+    getDoc, 
+    getDocs, 
+    addDoc, 
+    updateDoc, 
+    deleteDoc, 
+    setDoc, 
+    query, 
+    where,
+    getCountFromServer
+};

@@ -54,7 +54,9 @@ export interface Product {
   costPrice?: number;
   usp1Price?: number;
   usp1UseGlobalMarkup?: boolean;
-  priceTiers?: Record<string, number>; // Dynamic keys for roles
+  priceTiers?: Record<string, number>; // Dynamic keys for roles (base price)
+  tierPortions?: Record<string, ProductPortion[]>; // Dynamic keys for roles (allowed portions)
+  tierPriceOverrides?: Record<string, { half?: number; quarter?: number }>; // Dynamic keys for roles (special prices)
   visibleToRoles?: CustomerType[]; // If undefined or empty, visible to all
 }
 

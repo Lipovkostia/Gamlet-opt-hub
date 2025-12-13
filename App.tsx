@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES, Badge } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
@@ -453,7 +454,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     });
   };
 
-  const handleProductUpdate = async (productId: string, update: Partial<Product>) => {
+  const handleProductUpdate = async (productId: string, update: Partial<Product> | any) => {
     try {
         if (db) {
             const productRef = doc(db, "shops", shopId, "products", productId);
@@ -529,6 +530,23 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   };
   const handleUpdateProductPrices = (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => handleProductUpdate(productId, newPrices);
   const handleUpdateProductPriceTiers = (productId: string, newPriceTiers: Product['priceTiers']) => handleProductUpdate(productId, { priceTiers: newPriceTiers });
+  
+  // New handlers for tier specific data
+  const handleUpdateProductTierPortions = (productId: string, role: string, portions: ProductPortion[]) => {
+      const product = products.find(p => p.id === productId);
+      if(product) {
+          const newTierPortions = { ...(product.tierPortions || {}), [role]: portions };
+          handleProductUpdate(productId, { tierPortions: newTierPortions });
+      }
+  };
+  const handleUpdateProductTierPriceOverrides = (productId: string, role: string, overrides: { half?: number; quarter?: number }) => {
+      const product = products.find(p => p.id === productId);
+      if(product) {
+          const newTierPriceOverrides = { ...(product.tierPriceOverrides || {}), [role]: overrides };
+          handleProductUpdate(productId, { tierPriceOverrides: newTierPriceOverrides });
+      }
+  };
+
   const handleUpdateProductCostPrice = (productId: string, newCostPrice?: number) => handleProductUpdate(productId, { costPrice: newCostPrice });
   const handleUpdateProductUspPrices = (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => handleProductUpdate(productId, newUspPrices);
   const handleBulkUpdateUspPrices = (updates: { productId: string; usp1Price?: number; }[]) => updates.forEach(update => handleProductUpdate(update.productId, { usp1Price: update.usp1Price }));
@@ -777,6 +795,8 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 onUpdatePortions={handleUpdateProductPortions}
                 onUpdatePrices={handleUpdateProductPrices}
                 onUpdateProductPriceTiers={handleUpdateProductPriceTiers}
+                onUpdateTierPortions={handleUpdateProductTierPortions}
+                onUpdateTierPriceOverrides={handleUpdateProductTierPriceOverrides}
                 onUpdateProductCostPrice={handleUpdateProductCostPrice}
                 onUpdateUspPrices={handleUpdateProductUspPrices}
                 onBulkUpdateUspPrices={handleBulkUpdateUspPrices}

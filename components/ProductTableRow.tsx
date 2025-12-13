@@ -10,6 +10,8 @@ interface ProductTableRowProps {
     onUpdatePortions: (productId: string, portion: ProductPortion) => void;
     onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
     onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // New prop
+    onUpdateTierPortions?: (productId: string, role: string, portions: ProductPortion[]) => void;
+    onUpdateTierPriceOverrides?: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
     onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
     onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
@@ -79,6 +81,8 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     onUpdatePortions, 
     onUpdatePrices, 
     onUpdatePriceTiers,
+    onUpdateTierPortions,
+    onUpdateTierPriceOverrides,
     onUpdateUspPrices, 
     onUpdateUspMarkupFlags, 
     onUpdateUnitValue, 
@@ -187,10 +191,19 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const handlePriceOverrideChange = (portion: 'half' | 'quarter', value: string) => {
         const numValue = value === '' ? undefined : parseFloat(value);
         setEditedProduct(prev => {
-            const newOverrides = { ...prev.priceOverridesPerUnit, [portion]: numValue };
-            if (numValue === undefined) {
-                delete newOverrides[portion];
+            // Logic for specific Tier context
+            if (roleKey) {
+                const currentOverrides = prev.tierPriceOverrides?.[roleKey] || {};
+                const newOverrides = { ...currentOverrides, [portion]: numValue };
+                if (numValue === undefined) delete newOverrides[portion];
+                return { 
+                    ...prev, 
+                    tierPriceOverrides: { ...prev.tierPriceOverrides, [roleKey]: newOverrides } 
+                };
             }
+            // Logic for Global/Base context
+            const newOverrides = { ...prev.priceOverridesPerUnit, [portion]: numValue };
+            if (numValue === undefined) delete newOverrides[portion];
             return { ...prev, priceOverridesPerUnit: newOverrides };
         });
         setIsDirty(true);
@@ -198,10 +211,31 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     
     const handlePortionToggle = (portion: ProductPortion) => {
         if (portion === 'whole') return;
-        const newPortions = editedProduct.allowedPortions.includes(portion)
-            ? editedProduct.allowedPortions.filter(p => p !== portion)
-            : [...editedProduct.allowedPortions, portion];
-        setEditedProduct(prev => ({...prev, allowedPortions: newPortions}));
+        setEditedProduct(prev => {
+            // Determine active portions for current context
+            let currentList: ProductPortion[];
+            if (roleKey) {
+                // If roleKey is present, use tierPortions if defined, else fallback to empty (independent) or allowedPortions?
+                // Per requirement "not linked", we treat them as independent data.
+                // However, to be user friendly, if it's undefined, we might assume it inherits. 
+                // But to allow saving 'different' state, we must write to tierPortions.
+                // Let's assume if undefined in state, we take from props.tierPortions OR props.allowedPortions (initial load).
+                // But inside setEditedProduct we deal with `prev`.
+                currentList = prev.tierPortions?.[roleKey] ?? prev.allowedPortions;
+            } else {
+                currentList = prev.allowedPortions;
+            }
+
+            const newList = currentList.includes(portion)
+                ? currentList.filter(p => p !== portion)
+                : [...currentList, portion];
+            
+            if (roleKey) {
+                return { ...prev, tierPortions: { ...prev.tierPortions, [roleKey]: newList } };
+            } else {
+                return { ...prev, allowedPortions: newList };
+            }
+        });
         setIsDirty(true);
     }
     
@@ -243,6 +277,24 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         const combined = new Set([...allCategories, ...editedProduct.categories]);
         return Array.from(combined).sort();
     }, [allCategories, editedProduct.categories]);
+
+    // Helpers to get current values for rendering
+    const currentPortions = useMemo(() => {
+        if (roleKey) {
+            // If tierPortions is defined for this role, use it.
+            // If NOT defined, fallback to global allowedPortions for initial display.
+            return editedProduct.tierPortions?.[roleKey] ?? editedProduct.allowedPortions;
+        }
+        return editedProduct.allowedPortions;
+    }, [editedProduct, roleKey]);
+
+    const currentOverrides = useMemo(() => {
+        if (roleKey) {
+            return editedProduct.tierPriceOverrides?.[roleKey] ?? {};
+        }
+        return editedProduct.priceOverridesPerUnit;
+    }, [editedProduct, roleKey]);
+
 
     // Auto-save logic
     const handleSave = () => {
@@ -290,7 +342,44 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
             }
         }
 
-        // Price updates
+        // Portions & Special Prices Logic
+        if (roleKey) {
+            // Tier Specific Save
+            if (onUpdateTierPortions) {
+                const portions = editedProduct.tierPortions?.[roleKey] ?? currentPortions; // Use current/fallback if not in dirty state map yet
+                // Compare with original to avoid redundant writes
+                const originalTierPortions = product.tierPortions?.[roleKey];
+                // Deep comparison simplified: stringify
+                if (JSON.stringify(portions) !== JSON.stringify(originalTierPortions)) {
+                     onUpdateTierPortions(product.id, roleKey, portions);
+                }
+            }
+            if (onUpdateTierPriceOverrides) {
+                const overrides = editedProduct.tierPriceOverrides?.[roleKey] ?? {};
+                if (JSON.stringify(overrides) !== JSON.stringify(product.tierPriceOverrides?.[roleKey])) {
+                    onUpdateTierPriceOverrides(product.id, roleKey, overrides);
+                }
+            }
+        } else {
+            // Global Save
+            const originalPortions = new Set(product.allowedPortions);
+            const newPortions = new Set(editedProduct.allowedPortions);
+            if (originalPortions.has('half') !== newPortions.has('half')) onUpdatePortions(product.id, 'half');
+            if (originalPortions.has('quarter') !== newPortions.has('quarter')) onUpdatePortions(product.id, 'quarter');
+
+            // Base Prices & Overrides (Global)
+            const basePriceChanged = editedProduct.pricePerUnit !== product.pricePerUnit;
+            const overridesChanged = JSON.stringify(editedProduct.priceOverridesPerUnit) !== JSON.stringify(product.priceOverridesPerUnit);
+            
+            if (basePriceChanged || overridesChanged) {
+                 onUpdatePrices(product.id, { 
+                     pricePerUnit: editedProduct.pricePerUnit, 
+                     priceOverridesPerUnit: editedProduct.priceOverridesPerUnit 
+                 });
+            }
+        }
+
+        // Price Tiers (Role Specific Base Price)
         if (roleKey && onUpdatePriceTiers) {
             const newPrice = tierPrice === '' ? undefined : parseFloat(tierPrice);
             const currentPrice = product.priceTiers?.[roleKey];
@@ -303,21 +392,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                     delete newTiers[roleKey];
                 }
                 onUpdatePriceTiers(product.id, newTiers);
-            }
-        } else {
-            // Check prices change
-            if (editedProduct.pricePerUnit !== product.pricePerUnit || JSON.stringify(editedProduct.priceOverridesPerUnit) !== JSON.stringify(product.priceOverridesPerUnit)) {
-                onUpdatePrices(product.id, { pricePerUnit: editedProduct.pricePerUnit, priceOverridesPerUnit: editedProduct.priceOverridesPerUnit });
-            }
-            
-            const originalPortions = new Set(product.allowedPortions);
-            const newPortions = new Set(editedProduct.allowedPortions);
-
-            if (originalPortions.has('half') !== newPortions.has('half')) {
-                onUpdatePortions(product.id, 'half');
-            }
-            if (originalPortions.has('quarter') !== newPortions.has('quarter')) {
-                onUpdatePortions(product.id, 'quarter');
             }
         }
 
@@ -653,20 +727,20 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         ),
         portions: (
             <td key="portions" className={`${cellPadded} text-xs`}>
-                 {editedProduct.unit === 'kg' && !roleKey ? (
+                 {editedProduct.unit === 'kg' ? (
                      <div className="flex flex-col gap-0.5 justify-center h-full">
-                        <div className="flex items-center"><input id={`half-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('half')} onChange={() => handlePortionToggle('half')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`half-${product.id}`} className="ml-1">1/2</label></div>
-                        <div className="flex items-center"><input id={`quarter-${product.id}`} type="checkbox" checked={editedProduct.allowedPortions.includes('quarter')} onChange={() => handlePortionToggle('quarter')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`quarter-${product.id}`} className="ml-1">1/4</label></div>
+                        <div className="flex items-center"><input id={`half-${product.id}`} type="checkbox" checked={currentPortions.includes('half')} onChange={() => handlePortionToggle('half')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`half-${product.id}`} className="ml-1">1/2</label></div>
+                        <div className="flex items-center"><input id={`quarter-${product.id}`} type="checkbox" checked={currentPortions.includes('quarter')} onChange={() => handlePortionToggle('quarter')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`quarter-${product.id}`} className="ml-1">1/4</label></div>
                      </div>
                  ) : <span className="text-gray-300">-</span>}
             </td>
         ),
         special: (
             <td key="special" className={cellPadded}>
-                {editedProduct.unit === 'kg' && !roleKey ? (
+                {editedProduct.unit === 'kg' ? (
                     <div className="flex flex-col gap-1 justify-center h-full">
-                        <input type="number" value={editedProduct.priceOverridesPerUnit?.half ?? ''} onChange={e => handlePriceOverrideChange('half', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/2" className={nestedInputClasses} title="Цена за кг (1/2)"/>
-                        <input type="number" value={editedProduct.priceOverridesPerUnit?.quarter ?? ''} onChange={e => handlePriceOverrideChange('quarter', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/4" className={nestedInputClasses} title="Цена за кг (1/4)"/>
+                        <input type="number" value={currentOverrides?.half ?? ''} onChange={e => handlePriceOverrideChange('half', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/2" className={nestedInputClasses} title="Цена за кг (1/2)"/>
+                        <input type="number" value={currentOverrides?.quarter ?? ''} onChange={e => handlePriceOverrideChange('quarter', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/4" className={nestedInputClasses} title="Цена за кг (1/4)"/>
                     </div>
                 ) : <span className="text-gray-300 text-center block">-</span>}
             </td>

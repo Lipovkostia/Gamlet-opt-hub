@@ -12,6 +12,8 @@ interface ProductTableProps {
     onUpdatePortions: (productId: string, portion: ProductPortion) => void;
     onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
     onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // Added prop
+    onUpdateTierPortions?: (productId: string, role: string, portions: ProductPortion[]) => void;
+    onUpdateTierPriceOverrides?: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
     onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
     onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
@@ -72,7 +74,7 @@ const ResizeIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, visibleColumns, roleKey, onUpdatePriceTiers, ...propsForRow }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, visibleColumns, roleKey, onUpdatePriceTiers, onUpdateTierPortions, onUpdateTierPriceOverrides, ...propsForRow }) => {
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
     const [colOrder, setColOrder] = useState<string[]>(DEFAULT_ORDER);
     const [draggedCol, setDraggedCol] = useState<string | null>(null);
@@ -404,6 +406,8 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                             columnOrder={effectiveColumnOrder}
                             roleKey={roleKey}
                             onUpdatePriceTiers={onUpdatePriceTiers}
+                            onUpdateTierPortions={onUpdateTierPortions}
+                            onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
                             {...propsForRow}
                         />
                     ))}

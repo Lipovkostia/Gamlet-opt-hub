@@ -34,8 +34,10 @@ const DEFAULT_WIDTHS: Record<string, number> = {
     description: 250,
     categories: 180,
     visibility: 140,
-    price: 180,
-    value: 180,
+    price: 100,
+    unit: 70,
+    value: 80,
+    packaging: 90,
     portions: 160,
     special: 160,
     cost: 100,
@@ -44,7 +46,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
 
 const DEFAULT_ORDER = [
     'status', 'photo', 'name', 'description', 'categories', 'visibility', 
-    'price', 'value', 'portions', 'special', 'cost', 'actions'
+    'price', 'unit', 'value', 'packaging', 'portions', 'special', 'cost', 'actions'
 ];
 
 const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
@@ -54,10 +56,12 @@ const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
     description: "Описание",
     categories: "Категории",
     visibility: "Видимость",
-    price: "Цена / Ед.",
-    value: "Вес / Вид",
-    portions: "Порции (кг)",
-    special: "Спец. цены",
+    price: "Цена",
+    unit: "Ед.",
+    value: "Вес/Об.",
+    packaging: "Вид",
+    portions: "Порции",
+    special: "Спец.",
     cost: "Себест.",
     actions: <span>Действия</span>
 };
@@ -333,27 +337,27 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                                 `}
                                 style={{ width: `${colWidths[key]}px`, minWidth: `${colWidths[key]}px` }}
                             >
-                                <div className={`flex items-center justify-center pointer-events-none ${draggedCol === key ? 'invisible' : ''}`}>
-                                    <span className="truncate">{dynamicColumnLabels[key]}</span>
-                                    
-                                    {/* Mobile Resize Button */}
-                                    <button 
-                                        className="resize-btn pointer-events-auto p-1 ml-1 rounded hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors sm:hidden"
-                                        onClick={(e) => {
-                                            e.stopPropagation(); // Prevent drag start
-                                            setActiveResizeMenu(activeResizeMenu === key ? null : key);
-                                        }}
-                                        title="Изменить ширину"
-                                    >
-                                        <ResizeIcon className="w-3 h-3" />
-                                    </button>
+                                <div className={`flex items-center justify-center pointer-events-none w-full h-full ${draggedCol === key ? 'invisible' : ''}`}>
+                                    <span className="truncate px-1">{dynamicColumnLabels[key]}</span>
                                 </div>
+
+                                {/* Mobile Resize Button moved to border */}
+                                <button 
+                                    className="resize-btn absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center pointer-events-auto hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors sm:hidden z-10"
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // Prevent drag start
+                                        setActiveResizeMenu(activeResizeMenu === key ? null : key);
+                                    }}
+                                    title="Изменить ширину"
+                                >
+                                    <ResizeIcon className="w-3 h-3" />
+                                </button>
 
                                 {/* Slider Menu */}
                                 {activeResizeMenu === key && (
                                     <div 
                                         ref={resizeMenuRef}
-                                        className="absolute top-full left-0 z-50 bg-white shadow-xl border border-gray-200 rounded-md p-3 min-w-[200px]"
+                                        className="absolute top-full right-0 z-50 bg-white shadow-xl border border-gray-200 rounded-md p-3 min-w-[200px]"
                                         onClick={(e) => e.stopPropagation()} // Prevent bubble up
                                         onTouchStart={(e) => e.stopPropagation()} // Prevent touch drag interaction
                                     >

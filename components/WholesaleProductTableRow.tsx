@@ -11,12 +11,11 @@ interface WholesaleProductTableRowProps {
 
 const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ product, onUpdatePriceTiers, onUpdateProductCostPrice, wholesaleRoles }) => {
     const [editedTiers, setEditedTiers] = useState(product.priceTiers || {});
-    const [editedCostPrice, setEditedCostPrice] = useState<string>(product.costPrice?.toString() ?? '');
+    // Removed editable cost price state
     const [isDirty, setIsDirty] = useState(false);
 
     useEffect(() => {
         setEditedTiers(product.priceTiers || {});
-        setEditedCostPrice(product.costPrice?.toString() ?? '');
         setIsDirty(false);
     }, [product]);
 
@@ -32,22 +31,15 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
         setIsDirty(true);
     };
 
-    const handleCostPriceChange = (value: string) => {
-        setEditedCostPrice(value);
-        setIsDirty(true);
-    };
-
     const handleSave = () => {
         if (!isDirty) return;
         onUpdatePriceTiers(product.id, editedTiers);
-        const newCostPrice = parseFloat(editedCostPrice);
-        onUpdateProductCostPrice(product.id, isNaN(newCostPrice) ? undefined : newCostPrice);
+        // Cost price update removed from here
         setIsDirty(false);
     };
     
     const handleReset = () => {
         setEditedTiers(product.priceTiers || {});
-        setEditedCostPrice(product.costPrice?.toString() ?? '');
         setIsDirty(false);
     };
 
@@ -59,9 +51,9 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
             <td className="py-2 px-2">
                 <input 
                     type="number" 
-                    value={editedCostPrice} 
-                    onChange={e => handleCostPriceChange(e.target.value)} 
-                    className={baseInputClasses} 
+                    value={product.costPrice ?? ''} // Read directly from product props
+                    disabled // Disable editing
+                    className={`${baseInputClasses} bg-gray-100 text-gray-500 cursor-not-allowed`} 
                     placeholder="-"
                 />
             </td>

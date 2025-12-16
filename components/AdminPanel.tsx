@@ -591,43 +591,102 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 
                 const productsToAdd: Omit<Product, 'id' | 'status'>[] = [];
                 let errors = 0;
+                let errorDetails: string[] = [];
 
-                rawJson.forEach((row: any) => {
+                // Helper to normalize keys (fuzzy match)
+                const findKey = (row: any, ...candidates: string[]) => {
+                    const rowKeys = Object.keys(row);
+                    for (const candidate of candidates) {
+                        const found = rowKeys.find(k => k.trim().toLowerCase() === candidate.toLowerCase());
+                        if (found) return found;
+                    }
+                    return null;
+                }
+
+                // Helper to get value
+                const getValue = (row: any, ...candidates: string[]) => {
+                    const key = findKey(row, ...candidates);
+                    return key ? row[key] : undefined;
+                }
+
+                // Helper to parse numbers (supports "2,5", "2 500", etc.)
+                const parseNum = (val: any): number => {
+                    if (typeof val === 'number') return val;
+                    if (typeof val === 'string') {
+                        // Replace comma with dot, remove spaces
+                        const clean = val.replace(/,/g, '.').replace(/\s/g, '');
+                        const num = parseFloat(clean);
+                        return isNaN(num) ? NaN : num;
+                    }
+                    return NaN;
+                }
+
+                rawJson.forEach((row: any, index: number) => {
+                   const rowNum = index + 2; // Excel row number (1-based, +1 for header)
                    try {
-                        const name = row['Название']?.toString().trim();
+                        const nameKey = findKey(row, 'Название', 'Name');
+                        const name = row[nameKey!]?.toString().trim();
                         if (!name) throw new Error('Отсутствует название');
                         
-                        const pricePerUnit = parseFloat(row['Цена за ед.']);
-                        if (isNaN(pricePerUnit)) throw new Error('Неверная цена');
+                        const priceRaw = getValue(row, 'Цена за ед.', 'Price');
+                        let pricePerUnit = parseNum(priceRaw);
+                        if (isNaN(pricePerUnit)) pricePerUnit = 0;
 
-                        const unitValue = parseFloat(row['Значение ед.']);
-                        if (isNaN(unitValue)) throw new Error('Неверное значение ед.');
+                        const unitValueRaw = getValue(row, 'Значение ед.', 'Unit Value');
+                        let unitValue = parseNum(unitValueRaw);
+                        if (isNaN(unitValue)) unitValue = 1;
 
-                        const unit = row['Ед. изм. (kg, g, pcs, l)']?.toString().trim() as ProductUnit;
-                        if (!unitOptions.includes(unit)) throw new Error('Неверная ед. изм.');
+                        const unitRaw = getValue(row, 'Ед. изм. (kg, g, pcs, l)', 'Ед. изм.', 'Unit')?.toString().trim().toLowerCase();
+                        let unit = unitRaw as ProductUnit;
+                        // Fallback mapping for Russian units if user types them manually
+                        if (unitRaw === 'кг') unit = 'kg';
+                        if (unitRaw === 'гр' || unitRaw === 'г') unit = 'g';
+                        if (unitRaw === 'шт') unit = 'pcs';
+                        if (unitRaw === 'л') unit = 'l';
+
+                        if (!unitOptions.includes(unit)) {
+                            unit = 'kg'; // Default unit
+                        }
                         
-                        const packaging = row['Вид (головка, упаковка, штука, банка, ящик)']?.toString().trim() as ProductPackaging;
-                        if (!packagingOptions.includes(packaging)) throw new Error('Неверный вид');
+                        const packagingRaw = getValue(row, 'Вид (головка, упаковка, штука, банка, ящик)', 'Вид', 'Packaging')?.toString().trim().toLowerCase();
+                        let packaging = packagingRaw as ProductPackaging;
+                        
+                        if (!packagingOptions.includes(packaging)) {
+                             // Smart defaults based on unit
+                             if (unit === 'kg') packaging = 'головка';
+                             else if (unit === 'pcs') packaging = 'штука';
+                             else packaging = 'упаковка';
+                        }
 
                         const allowedPortions: ProductPortion[] = ['whole'];
                         if (unit === 'kg') {
-                            if (row['Продавать половинками (да/нет)']?.toString().toLowerCase() === 'да') {
+                            const halfRaw = getValue(row, 'Продавать половинками (да/нет)', 'Half')?.toString().toLowerCase();
+                            if (halfRaw === 'да' || halfRaw === 'yes' || halfRaw === 'true' || halfRaw === '1') {
                                 allowedPortions.push('half');
                             }
-                            if (row['Продавать четвертинками (да/нет)']?.toString().toLowerCase() === 'да') {
+                            const quarterRaw = getValue(row, 'Продавать четвертинками (да/нет)', 'Quarter')?.toString().toLowerCase();
+                            if (quarterRaw === 'да' || quarterRaw === 'yes' || quarterRaw === 'true' || quarterRaw === '1') {
                                 allowedPortions.push('quarter');
                             }
                         }
                         
+                        const categoriesRaw = getValue(row, 'Категории (через ;)', 'Categories')?.toString();
+                        const categories = categoriesRaw ? categoriesRaw.split(';').map((c: string) => c.trim()).filter(Boolean) : [];
+
+                        const imagesRaw = getValue(row, 'URL изображений (через ;)', 'Images')?.toString();
+                        const images = imagesRaw ? imagesRaw.split(';').map((url: string) => url.trim()).filter(Boolean) : [];
+
+                        const desc = getValue(row, 'Описание', 'Description')?.toString().trim() || '';
+
                         const product: Omit<Product, 'id' | 'status'> = {
                             name,
-                            description: row['Описание']?.toString().trim() || '',
+                            description: desc,
                             pricePerUnit,
                             unitValue,
                             unit,
                             packaging,
-                            categories: row['Категории (через ;)']?.toString().split(';').map((c: string) => c.trim()).filter(Boolean) || [],
-                            imageUrls: row['URL изображений (через ;)']?.toString().split(';').map((url: string) => url.trim()).filter(Boolean) || [],
+                            categories,
+                            imageUrls: images,
                             allowedPortions,
                             priceOverridesPerUnit: {},
                             usp1UseGlobalMarkup: true,
@@ -635,20 +694,35 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         productsToAdd.push(product);
 
                    } catch(err: any) {
-                       console.warn(`Пропуск строки из-за ошибки: ${err.message}`, row);
+                       console.warn(`Row ${rowNum} error: ${err.message}`, row);
                        errors++;
+                       if (errorDetails.length < 5) {
+                           errorDetails.push(`Строка ${rowNum}: ${err.message}`);
+                       }
                    }
                 });
 
                 if (productsToAdd.length > 0) {
                     onBulkAddProducts(productsToAdd);
+                    let msg = `Обработка завершена. Добавлено товаров: ${productsToAdd.length}.`;
+                    if (errors > 0) {
+                        msg += ` Не загружено строк: ${errors}.`;
+                        if (errorDetails.length > 0) {
+                            msg += ` Примеры ошибок: ${errorDetails.join('; ')}`;
+                        }
+                    }
+                    setUploadMessage(msg);
+                } else {
+                    let msg = `Ни одного товара не добавлено. Ошибок: ${errors}.`;
+                    if (errorDetails.length > 0) {
+                        msg += ` Примеры: ${errorDetails.join('; ')}`;
+                    }
+                    setUploadMessage(msg);
                 }
-                
-                setUploadMessage(`Обработка завершена. Добавлено товаров: ${productsToAdd.length}. Строк с ошибками: ${errors}.`);
 
             } catch (error) {
                 console.error("Ошибка при обработке Excel файла:", error);
-                setUploadMessage('Ошибка при чтении файла. Убедитесь, что это корректный .xlsx файл.');
+                setUploadMessage('Критическая ошибка при чтении файла. Убедитесь, что это корректный .xlsx файл.');
             } finally {
                 setIsUploading(false);
                  // Reset file input value to allow re-uploading the same file
@@ -1515,7 +1589,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                          </label>
                          <input id="excel-upload" type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls, .csv" disabled={isUploading} />
                     </div>
-                    {uploadMessage && <p className="mt-4 text-sm text-gray-700 bg-gray-100 p-3 rounded-md">{uploadMessage}</p>}
+                    {uploadMessage && <p className="mt-4 text-sm text-gray-700 bg-gray-100 p-3 rounded-md whitespace-pre-wrap">{uploadMessage}</p>}
                 </div>
             )}
 

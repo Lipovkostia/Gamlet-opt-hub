@@ -97,7 +97,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
     const resizeMenuRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLTableElement>(null);
     const ghostRef = useRef<HTMLDivElement>(null);
-    const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Load saved settings from localStorage on mount
     useEffect(() => {

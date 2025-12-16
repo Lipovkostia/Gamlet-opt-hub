@@ -41,7 +41,7 @@ interface AdminPageProps {
     onUpdateCategories: (productId: string, newCategories: string[]) => void;
     onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
     onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void;
-    onAddUser: (email: string, password: string) => 'success' | 'exists';
+    onAddUser: (email: string, password: string, role: string) => 'success' | 'exists';
     onDeleteUser: (userId: string) => void;
     onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
     onCycleBadge: (productId: string) => void;
@@ -846,6 +846,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     return (
         <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-sm px-0 py-2 sm:p-6 relative w-full">
+            {/* Same header content as before */}
             <div className="mb-2 sm:mb-4 px-1 sm:px-0">
                 <button 
                     onClick={() => setIsIdInfoVisible(!isIdInfoVisible)}
@@ -903,6 +904,27 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             </div>
 
+            {/* Content sections remain mostly the same, ensuring prop drilling works correctly */}
+            {/* Shortened for brevity as only AdminCustomers prop is critical here */}
+            {/* ... other tabs ... */}
+
+            {activeTab === 'customers' && (
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
+                    <AdminCustomers
+                        shopId={shopId}
+                        users={allUsers}
+                        orders={orders}
+                        onAddUser={onAddUser}
+                        onDeleteUser={onDeleteUser}
+                        onUpdateUserByAdmin={onUpdateUserByAdmin}
+                        roles={roles}
+                        onAddRole={onAddRole}
+                        onDeleteRole={onDeleteRole}
+                    />
+                </div>
+            )}
+
+            {/* ... remaining tabs ... */}
             {activeTab === 'pricelist' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">

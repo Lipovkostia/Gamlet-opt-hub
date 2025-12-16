@@ -1,12 +1,12 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Order, CustomerType } from '../types';
 
 interface AdminCustomersProps {
     shopId: string;
     users: User[];
     orders: Order[];
-    onAddUser: (email: string, password: string) => 'success' | 'exists';
+    onAddUser: (email: string, password: string, role: string) => 'success' | 'exists';
     onDeleteUser: (userId: string) => void;
     onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
     roles: string[];
@@ -106,12 +106,20 @@ const UserEditor: React.FC<{ user: User; roles: string[]; onSave: (updates: Part
 const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, onAddUser, onDeleteUser, onUpdateUserByAdmin, roles, onAddRole, onDeleteRole }) => {
     const [login, setLogin] = useState('');
     const [password, setPassword] = useState('');
+    const [selectedRole, setSelectedRole] = useState(roles[0] || 'Розничный');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [generatedLink, setGeneratedLink] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
     const [newRoleName, setNewRoleName] = useState('');
+
+    useEffect(() => {
+        // Ensure default role is valid if roles change
+        if (!roles.includes(selectedRole) && roles.length > 0) {
+            setSelectedRole(roles[0]);
+        }
+    }, [roles, selectedRole]);
 
     const handleAddUser = (e: React.FormEvent) => {
         e.preventDefault();
@@ -124,7 +132,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
             return;
         }
 
-        const result = onAddUser(login, password);
+        const result = onAddUser(login, password, selectedRole);
 
         if (result === 'success') {
             setSuccess(`Пользователь ${login} успешно добавлен.`);
@@ -226,6 +234,19 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
                                         required
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                     />
+                                </div>
+                                <div>
+                                    <label htmlFor="role-select" className="block text-sm font-medium text-gray-700">Тип покупателя</label>
+                                    <select
+                                        id="role-select"
+                                        value={selectedRole}
+                                        onChange={(e) => setSelectedRole(e.target.value)}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    >
+                                        {roles.map(role => (
+                                            <option key={role} value={role}>{role}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
                              <div className="flex justify-end">

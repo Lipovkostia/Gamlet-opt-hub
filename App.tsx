@@ -611,13 +611,13 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleCloseGalleryModal = () => setGalleryModalInfo(null);
   const handleAnimationEnd = (id: number) => setFlyingItems(prev => prev.filter(item => item.id !== id));
   
-  const handleAddUser = (email: string, password: string): 'success' | 'exists' => {
+  const handleAddUser = (email: string, password: string, role: string): 'success' | 'exists' => {
       // In multi-tenant, simple "check array" works for now, but strictly should be async check in AuthContext/DB
       // For Admin UI convenience:
       if (allUsers.some(u => u.email === email)) return 'exists';
       const newUser: User = {
         id: Date.now().toString(), email, passwordHash: simpleHash(password),
-        isAdmin: false, customerType: 'Розничный',
+        isAdmin: false, customerType: role,
       };
       if(db && usersCollection) addDoc(usersCollection, newUser).then(ref => {
           newUser.id = ref.id;

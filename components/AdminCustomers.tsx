@@ -33,6 +33,15 @@ const LinkIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
+// Mapping for cleaner URLs
+const ROLE_TO_SLUG: Record<string, string> = {
+    'Розничный': 'retail',
+    'постоянный': 'vip',
+    'оптовый': 'wholesale',
+    'крупный опт': 'big-wholesale',
+    'средний опт': 'mid-wholesale'
+};
+
 const UserEditor: React.FC<{ user: User; roles: string[]; onSave: (updates: Partial<User> & { newPassword?: string }) => void; onCancel: () => void; }> = ({ user, roles, onSave, onCancel }) => {
     const [name, setName] = useState(user.name || '');
     const [city, setCity] = useState(user.city || '');
@@ -177,8 +186,9 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
 
     const generateRegistrationLink = (type: string) => {
         const origin = window.location.origin;
-        const path = window.location.pathname;
-        return `${origin}${path}?shopId=${shopId}&registerType=${encodeURIComponent(type)}`;
+        // Use clean "join" URL pattern
+        const slug = ROLE_TO_SLUG[type] || encodeURIComponent(type);
+        return `${origin}/join/${shopId}/${slug}`;
     }
 
 
@@ -261,7 +271,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
                                     className="flex-grow px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                 />
                                 <button 
-                                    type="submit"
+                                    type="submit" 
                                     disabled={!newRoleName.trim()}
                                     className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
                                 >
@@ -296,7 +306,7 @@ const AdminCustomers: React.FC<AdminCustomersProps> = ({ shopId, users, orders, 
                     <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                         <div className="p-4 bg-gray-50 border-b">
                             <p className="text-sm text-gray-600">
-                                Отправьте эти ссылки клиентам. При регистрации по ним, клиенту автоматически будет присвоен выбранный тип цен.
+                                Отправьте эти ссылки клиентам. При переходе по ней, клиенту автоматически будет присвоен выбранный тип цен.
                             </p>
                         </div>
                         <div className="divide-y divide-gray-200 max-h-[500px] overflow-y-auto">

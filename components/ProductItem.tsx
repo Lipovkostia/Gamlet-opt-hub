@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, ProductBadge, Badge } from '../types';
+import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, ProductBadge, Badge, CartItem } from '../types';
 
 interface ProductItemProps {
   product: Product;
@@ -23,6 +23,7 @@ interface ProductItemProps {
   onUpdateCategories?: (productId: string, newCategories: string[]) => void;
   onCycleBadge?: (productId: string) => void;
   badges?: Badge[];
+  cartItems?: CartItem[];
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -234,7 +235,7 @@ const DetailsEditorComponent: React.FC<{
 );
 
 
-const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpanded, onToggleExpand, isGalleryOpen, onToggleGallery, isAdminView, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge, badges = [] }) => {
+const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpanded, onToggleExpand, isGalleryOpen, onToggleGallery, isAdminView, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge, badges = [], cartItems }) => {
   const [isPriceEditing, setIsPriceEditing] = useState(false);
   const [isUnitValueEditing, setIsUnitValueEditing] = useState(false);
   const [isDetailsEditing, setIsDetailsEditing] = useState(false);
@@ -333,6 +334,13 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
         // Вызываем onAddToCart без startRect, чтобы пропустить анимацию, но добавить товар.
         onAddToCart(product, portion, undefined);
     }
+  };
+
+  const getQuantity = (portion: ProductPortion) => {
+    if (!cartItems) return 0;
+    const cartItemId = `${product.id}-${portion}`;
+    const item = cartItems.find(i => i.cartId === cartItemId);
+    return item ? item.quantity : 0;
   };
 
   const wholePrice = getPortionPrice('whole');
@@ -527,7 +535,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
 
   const itemClasses = `px-2 sm:px-3 py-[3px] transition-colors duration-150 flex flex-col ${product.status === ProductStatus.Hidden && isAdminView ? 'bg-gray-100 opacity-60' : 'hover:bg-gray-50'}`
 
-  const customerButtonClasses = "flex items-center gap-1.5 text-center px-2 py-1.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200";
+  const customerButtonClasses = "relative flex items-center gap-1.5 text-center px-2 py-1.5 bg-indigo-100 text-indigo-700 font-semibold rounded-lg hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200";
 
   const getAdminPortionButtonClasses = (isAllowed: boolean) => 
     `flex items-center gap-1.5 text-center p-2 font-semibold rounded-lg transition-colors duration-200 ${
@@ -736,6 +744,11 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                               >
                                   <QuarterCircleIcon className="w-4 h-4"/>
                                   <span className="text-xs">{formatPrice(quarterPrice)} ₽</span>
+                                  {getQuantity('quarter') > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 min-w-[1rem] px-1 flex items-center justify-center rounded-full shadow-sm border border-white z-10">
+                                        {getQuantity('quarter')}
+                                    </span>
+                                  )}
                               </button>
                             )}
                             {product.unit === 'kg' && product.allowedPortions.includes('half') && (
@@ -746,6 +759,11 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                               >
                                   <HalfCircleIcon className="w-4 h-4"/>
                                   <span className="text-xs">{formatPrice(halfPrice)} ₽</span>
+                                  {getQuantity('half') > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 min-w-[1rem] px-1 flex items-center justify-center rounded-full shadow-sm border border-white z-10">
+                                        {getQuantity('half')}
+                                    </span>
+                                  )}
                               </button>
                             )}
                             {product.allowedPortions.includes('whole') && (
@@ -756,6 +774,11 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                               >
                                   <FullCircleIcon className="w-4 h-4"/>
                                   <span className="text-xs">{formatPrice(wholePrice)} ₽</span>
+                                  {getQuantity('whole') > 0 && (
+                                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 min-w-[1rem] px-1 flex items-center justify-center rounded-full shadow-sm border border-white z-10">
+                                        {getQuantity('whole')}
+                                    </span>
+                                  )}
                               </button>
                             )}
                           </>

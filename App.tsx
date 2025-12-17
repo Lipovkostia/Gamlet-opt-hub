@@ -877,6 +877,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                   onOpenGalleryModal={handleOpenGalleryModal}
                   showProductImages={showProductImages}
                   badges={badges}
+                  cartItems={cartItems}
                 />
               )}
             </>

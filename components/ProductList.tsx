@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Product, ProductPortion, ProductPackaging, ProductUnit, Badge } from '../types';
+import { Product, ProductPortion, ProductPackaging, ProductUnit, Badge, CartItem } from '../types';
 import ProductItem from './ProductItem';
 
 interface ProductListProps {
@@ -20,9 +20,10 @@ interface ProductListProps {
   onUpdateCategories?: (productId: string, newCategories: string[]) => void;
   onCycleBadge?: (productId: string) => void;
   badges?: Badge[];
+  cartItems?: CartItem[];
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, isAdminView = false, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge, badges = [] }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, isAdminView = false, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onOpenGalleryModal, showProductImages = true, allCategories, onUpdateCategories, onCycleBadge, badges = [], cartItems }) => {
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
   const [galleryProductId, setGalleryProductId] = useState<string | null>(null);
 
@@ -67,6 +68,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, onAddToCart, isAdmi
               onUpdateCategories={onUpdateCategories}
               onCycleBadge={onCycleBadge}
               badges={badges}
+              cartItems={cartItems}
             />
           ))
         ) : (

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { db, collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where } from '../lib/firebase';
 import { User, ProductStatus, Shop } from '../types';
@@ -79,7 +80,85 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
             const { id, ...userData } = adminUser;
             const userDocRef = await addDoc(collection(db, 'shops', shopId, 'users'), userData);
 
-            // 3. Auto-login logic: Seed storage before switching context
+            // 3. Add 5 Demo Products
+            const demoProducts = [
+                {
+                    name: "Сыр Гауда Премиум",
+                    description: "Классический полутвердый сыр с мягким сливочным вкусом. Отлично подходит для бутербродов и завтраков.",
+                    pricePerUnit: 1200,
+                    unit: 'kg',
+                    unitValue: 1,
+                    packaging: 'головка',
+                    categories: ['Твердые'],
+                    imageUrls: ["https://images.unsplash.com/photo-1452195100486-9cc805987862?auto=format&fit=crop&w=800&q=80"],
+                    allowedPortions: ['whole', 'half', 'quarter'],
+                    status: ProductStatus.Available,
+                    usp1UseGlobalMarkup: true,
+                    priceOverridesPerUnit: {}
+                },
+                {
+                    name: "Камамбер с трюфелем",
+                    description: "Мягкий сыр с белой плесенью и изысканным ароматом трюфеля. Деликатес для настоящих гурманов.",
+                    pricePerUnit: 450,
+                    unit: 'pcs',
+                    unitValue: 1,
+                    packaging: 'штука',
+                    categories: ['Мягкие', 'С плесенью'],
+                    imageUrls: ["https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?auto=format&fit=crop&w=800&q=80"],
+                    allowedPortions: ['whole'],
+                    status: ProductStatus.Available,
+                    usp1UseGlobalMarkup: true,
+                    priceOverridesPerUnit: {}
+                },
+                {
+                    name: "Горгонзола Пиканте",
+                    description: "Итальянский голубой сыр с характерной остринкой. Прекрасно сочетается с медом и грушей.",
+                    pricePerUnit: 1800,
+                    unit: 'kg',
+                    unitValue: 1,
+                    packaging: 'головка',
+                    categories: ['С плесенью'],
+                    imageUrls: ["https://images.unsplash.com/photo-1626957341926-98752fc2ba90?auto=format&fit=crop&w=800&q=80"],
+                    allowedPortions: ['whole', 'half', 'quarter'],
+                    status: ProductStatus.Available,
+                    usp1UseGlobalMarkup: true,
+                    priceOverridesPerUnit: {}
+                },
+                {
+                    name: "Козий Бюш де Шевр",
+                    description: "Нежный козий сыр в форме поленца. Обладает свежим вкусом и тающей текстурой.",
+                    pricePerUnit: 350,
+                    unit: 'pcs',
+                    unitValue: 1,
+                    packaging: 'упаковка',
+                    categories: ['Козьи и овечьи'],
+                    imageUrls: ["https://images.unsplash.com/photo-1563293863-7e4465d33306?auto=format&fit=crop&w=800&q=80"],
+                    allowedPortions: ['whole'],
+                    status: ProductStatus.Available,
+                    usp1UseGlobalMarkup: true,
+                    priceOverridesPerUnit: {}
+                },
+                {
+                    name: "Мёд Горное Разнотравье",
+                    description: "Натуральный мед, собранный на альпийских лугах. Идеальное дополнение к сырной тарелке.",
+                    pricePerUnit: 600,
+                    unit: 'pcs',
+                    unitValue: 1,
+                    packaging: 'банка',
+                    categories: ['Деликатесы'],
+                    imageUrls: ["https://images.unsplash.com/photo-1587049359681-3676a82e3576?auto=format&fit=crop&w=800&q=80"],
+                    allowedPortions: ['whole'],
+                    status: ProductStatus.Available,
+                    usp1UseGlobalMarkup: true,
+                    priceOverridesPerUnit: {}
+                }
+            ];
+
+            const productsCollection = collection(db, 'shops', shopId, 'products');
+            // Add products in parallel
+            await Promise.all(demoProducts.map(p => addDoc(productsCollection, p)));
+
+            // 4. Auto-login logic: Seed storage before switching context
             const finalAdminUser = { ...adminUser, id: userDocRef.id };
             const currentUserKey = `shop_${shopId}_currentUser`;
             const usersKey = `shop_${shopId}_users`;
@@ -87,7 +166,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
             sessionStorage.setItem(currentUserKey, JSON.stringify(finalAdminUser));
             localStorage.setItem(usersKey, JSON.stringify([finalAdminUser]));
 
-            // 4. Switch view via callback
+            // 5. Switch view via callback
             onShopCreated(shopId, shopName);
 
         } catch (error) {

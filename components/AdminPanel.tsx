@@ -1012,12 +1012,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         return () => clearInterval(interval);
     }, [msAutoRefresh, activeTab, msLogin, msPassword, handleLoadMoySklad]);
 
-    // Auto-load data if credentials exist but data is empty (e.g. on first load or refresh)
-    useEffect(() => {
-        if (activeTab === 'moysklad' && msLogin && msPassword && msData.length === 0 && !msLoading) {
-            handleLoadMoySklad(false);
-        }
-    }, [activeTab, msLogin, msPassword, msData.length, msLoading, handleLoadMoySklad]);
+    // Removed auto-load useEffect to prevent infinite loop on error/empty data.
 
     const handleMsToggleRow = (id: string) => {
         setSelectedMsIds(prev => {
@@ -1403,6 +1398,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     </label>
                                 </div>
                                 <button 
+                                    type="button"
                                     onClick={() => handleLoadMoySklad(false)} 
                                     disabled={msLoading}
                                     className="bg-indigo-600 text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"

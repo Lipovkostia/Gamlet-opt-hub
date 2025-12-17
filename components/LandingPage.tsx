@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { db, collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where } from '../lib/firebase';
 import { User, ProductStatus, Shop } from '../types';
+import InstructionsModal from './InstructionsModal';
 
 const simpleHash = (str: string) => {
     let hash = 0;
@@ -48,6 +49,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
     const [selectedShopName, setSelectedShopName] = useState('');
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+    // Instructions Modal State
+    const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
 
     const handleCreateShop = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -708,6 +712,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                 </div>
             )}
 
+            {/* Instructions Modal */}
+            {isInstructionsOpen && (
+                <InstructionsModal onClose={() => setIsInstructionsOpen(false)} />
+            )}
+
             <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl w-full flex flex-col md:flex-row gap-8">
                 <div className="flex-1 flex flex-col justify-center">
                     <h1 className="text-4xl font-extrabold text-gray-900 mb-4">
@@ -730,6 +739,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                             Уникальная ссылка для ваших покупателей
                         </li>
                     </ul>
+
+                    {/* Instructions Button */}
+                    <div className="mt-8 flex justify-center md:justify-start">
+                        <button
+                            onClick={() => setIsInstructionsOpen(true)}
+                            className="group relative px-6 py-3 border-2 border-indigo-200 text-indigo-600 font-semibold rounded-full hover:bg-indigo-50 hover:border-indigo-300 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        >
+                            <span className="flex items-center gap-2">
+                                📖 Инструкция к платформе
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 bg-gray-50 rounded-xl p-6 border border-gray-100 flex flex-col">

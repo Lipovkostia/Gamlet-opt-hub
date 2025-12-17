@@ -433,14 +433,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
 
     if (isSuperAdmin) {
         return (
-            <div className="min-h-screen bg-gray-100 p-8">
+            <div className="min-h-screen bg-gray-100 p-0 sm:p-8">
                 <div className="max-w-6xl mx-auto">
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-3xl font-bold text-gray-800">Панель Супер-Админа</h1>
+                    <div className="flex justify-between items-center mb-4 sm:mb-8 p-4 sm:p-0">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Панель Супер-Админа</h1>
                         <button onClick={() => setIsSuperAdmin(false)} className="text-red-600 hover:underline">Выйти</button>
                     </div>
 
-                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                    <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow overflow-hidden">
                         <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
                             <h2 className="text-lg font-semibold">Список магазинов ({allShops.length})</h2>
                             <button onClick={fetchShops} className="text-sm text-indigo-600 hover:text-indigo-800">Обновить список</button>
@@ -464,7 +464,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                                     <tbody className="divide-y divide-gray-200">
                                         {allShops.map((shop) => (
                                             <tr key={shop.id} className="hover:bg-gray-50 transition">
-                                                <td className="p-4 font-semibold text-gray-900">{shop.name}</td>
+                                                <td className="p-4 font-semibold text-gray-900">
+                                                    <button 
+                                                        onClick={() => handleEnterShopAsAdmin(shop)}
+                                                        className="text-left text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none"
+                                                    >
+                                                        {shop.name}
+                                                    </button>
+                                                </td>
                                                 <td className="p-4 font-mono text-xs">{shop.id}</td>
                                                 <td className="p-4">{shop.ownerEmail}</td>
                                                 <td className="p-4">

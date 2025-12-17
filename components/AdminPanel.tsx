@@ -65,6 +65,7 @@ const BADGE_COLORS = [
 ];
 
 const TABLE_COLUMNS_OPTIONS = [
+    { key: 'select', label: 'Выбор' }, // Added select column option
     { key: 'status', label: 'Статус' },
     { key: 'photo', label: 'Фото' },
     { key: 'name', label: 'Название' },
@@ -165,6 +166,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     });
     // MoySklad Selection State
     const [selectedMsIds, setSelectedMsIds] = useState<Set<string>>(new Set());
+
+    // Main Table Selection State
+    const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
 
     // Persistence Effects
     useEffect(() => { localStorage.setItem('ms_login', msLogin); }, [msLogin]);
@@ -317,6 +321,45 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             alert(`${updates.length} товаров обновлено.`);
         } else {
             alert('Нет товаров для обновления. Убедитесь, что у отфильтрованных товаров указана себестоимость, задан процент наценки и они используют общую наценку (%).');
+        }
+    };
+
+    const handleTableToggleRow = (id: string) => {
+        setSelectedProductIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleTableToggleAll = () => {
+        // Toggle based on visible products
+        const visibleIds = filteredTableProducts.map(p => p.id);
+        const allSelected = visibleIds.every(id => selectedProductIds.has(id));
+
+        if (allSelected) {
+            // Deselect visible
+            setSelectedProductIds(prev => {
+                const next = new Set(prev);
+                visibleIds.forEach(id => next.delete(id));
+                return next;
+            });
+        } else {
+            // Select visible
+            setSelectedProductIds(prev => {
+                const next = new Set(prev);
+                visibleIds.forEach(id => next.add(id));
+                return next;
+            });
+        }
+    };
+
+    const handleBulkDeleteProducts = () => {
+        if (selectedProductIds.size === 0) return;
+        if (window.confirm(`Вы уверены, что хотите удалить выбранные товары (${selectedProductIds.size})? Это действие нельзя отменить.`)) {
+            selectedProductIds.forEach(id => onDeleteProduct(id));
+            setSelectedProductIds(new Set());
         }
     };
 
@@ -1532,6 +1575,24 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         </div>
                     </div>
 
+                    {/* Bulk Action Bar */}
+                    {selectedProductIds.size > 0 && (
+                        <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between animate-fade-in-up">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-indigo-700 text-sm">Выбрано: {selectedProductIds.size}</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handleBulkDeleteProducts}
+                                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 transition-colors flex items-center gap-1"
+                                >
+                                    <TrashIcon className="w-4 h-4" />
+                                    Удалить выбранные
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <ProductTable
                         products={filteredTableProducts}
                         allCategories={allCategories}
@@ -1554,6 +1615,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         visibleColumns={visibleMasterColumns}
                         onUpdateTierPortions={onUpdateTierPortions}
                         onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
+                        selectedIds={selectedProductIds}
+                        onToggleRow={handleTableToggleRow}
+                        onToggleAll={handleTableToggleAll}
+                        isAllSelected={filteredTableProducts.length > 0 && filteredTableProducts.every(p => selectedProductIds.has(p.id))}
                     />
                 </div>
             )}

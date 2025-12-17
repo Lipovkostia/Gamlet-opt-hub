@@ -9,7 +9,7 @@ interface ProductTableRowProps {
     onCycleStatus: (productId: string) => void;
     onUpdatePortions: (productId: string, portion: ProductPortion) => void;
     onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
-    onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // New prop
+    onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void;
     onUpdateTierPortions?: (productId: string, role: string, portions: ProductPortion[]) => void;
     onUpdateTierPriceOverrides?: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
     onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
@@ -21,7 +21,9 @@ interface ProductTableRowProps {
     onUpdateVisibility: (productId: string, visibleToRoles: CustomerType[]) => void;
     roles?: string[];
     columnOrder?: string[];
-    roleKey?: string; // New prop to identify current pricing role context
+    roleKey?: string;
+    isSelected?: boolean; // New prop
+    onToggleSelect?: (productId: string) => void; // New prop
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -91,8 +93,10 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     onUpdateImages, 
     onUpdateVisibility, 
     roles = [],
-    columnOrder = ['status', 'photo', 'name', 'description', 'categories', 'visibility', 'price', 'value', 'portions', 'special', 'cost', 'actions'],
-    roleKey // Optional: if present, we are editing a specific tier price
+    columnOrder = ['select', 'status', 'photo', 'name', 'description', 'categories', 'visibility', 'price', 'value', 'portions', 'special', 'cost', 'actions'],
+    roleKey,
+    isSelected = false,
+    onToggleSelect
 }) => {
     const [editedProduct, setEditedProduct] = useState(product);
     const [tierPrice, setTierPrice] = useState<string>(
@@ -215,12 +219,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
             // Determine active portions for current context
             let currentList: ProductPortion[];
             if (roleKey) {
-                // If roleKey is present, use tierPortions if defined, else fallback to empty (independent) or allowedPortions?
-                // Per requirement "not linked", we treat them as independent data.
-                // However, to be user friendly, if it's undefined, we might assume it inherits. 
-                // But to allow saving 'different' state, we must write to tierPortions.
-                // Let's assume if undefined in state, we take from props.tierPortions OR props.allowedPortions (initial load).
-                // But inside setEditedProduct we deal with `prev`.
                 currentList = prev.tierPortions?.[roleKey] ?? prev.allowedPortions;
             } else {
                 currentList = prev.allowedPortions;
@@ -281,8 +279,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     // Helpers to get current values for rendering
     const currentPortions = useMemo(() => {
         if (roleKey) {
-            // If tierPortions is defined for this role, use it.
-            // If NOT defined, fallback to global allowedPortions for initial display.
             return editedProduct.tierPortions?.[roleKey] ?? editedProduct.allowedPortions;
         }
         return editedProduct.allowedPortions;
@@ -544,6 +540,16 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
 
     // Map content for each cell type
     const cells: Record<string, React.ReactNode> = {
+        select: (
+            <td key="select" className={`${cellPadded} text-center w-8`}>
+                <input 
+                    type="checkbox" 
+                    checked={isSelected} 
+                    onChange={() => onToggleSelect && onToggleSelect(product.id)}
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                />
+            </td>
+        ),
         status: (
             <td key="status" className={`${cellPadded} text-center`}>
                 <button onClick={() => onCycleStatus(product.id)} className={`p-1 rounded hover:bg-gray-200 ${StatusInfo.color}`} title={StatusInfo.label}>
@@ -797,7 +803,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     };
 
     return (
-        <tr className={`transition-colors hover:bg-gray-50 ${isDirty ? 'bg-yellow-50' : ''}`}>
+        <tr className={`transition-colors hover:bg-gray-50 ${isDirty ? 'bg-yellow-50' : ''} ${isSelected ? 'bg-indigo-50' : ''}`}>
             {columnOrder.map(colKey => cells[colKey] || null)}
         </tr>
     );

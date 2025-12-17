@@ -27,9 +27,14 @@ interface ProductTableProps {
     roles?: string[];
     visibleColumns?: string[];
     roleKey?: string; // Added prop to filter/edit specific role prices
+    selectedIds?: Set<string>; // New
+    onToggleRow?: (id: string) => void; // New
+    onToggleAll?: () => void; // New
+    isAllSelected?: boolean; // New
 }
 
 const DEFAULT_WIDTHS: Record<string, number> = {
+    select: 40,
     status: 50,
     photo: 60,
     name: 200,
@@ -47,11 +52,12 @@ const DEFAULT_WIDTHS: Record<string, number> = {
 };
 
 const DEFAULT_ORDER = [
-    'status', 'photo', 'name', 'description', 'categories', 'visibility', 
+    'select', 'status', 'photo', 'name', 'description', 'categories', 'visibility', 
     'price', 'unit', 'value', 'packaging', 'portions', 'special', 'cost', 'actions'
 ];
 
 const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
+    select: "",
     status: "Статус",
     photo: "Фото",
     name: "Название",
@@ -74,7 +80,23 @@ const ResizeIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
-const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUspMarkups, onApplyMarkups, roles, visibleColumns, roleKey, onUpdatePriceTiers, onUpdateTierPortions, onUpdateTierPriceOverrides, ...propsForRow }) => {
+const ProductTable: React.FC<ProductTableProps> = ({ 
+    products, 
+    uspMarkups, 
+    setUspMarkups, 
+    onApplyMarkups, 
+    roles, 
+    visibleColumns, 
+    roleKey, 
+    onUpdatePriceTiers, 
+    onUpdateTierPortions, 
+    onUpdateTierPriceOverrides,
+    selectedIds,
+    onToggleRow,
+    onToggleAll,
+    isAllSelected,
+    ...propsForRow 
+}) => {
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
     const [colOrder, setColOrder] = useState<string[]>(DEFAULT_ORDER);
     const [draggedCol, setDraggedCol] = useState<string | null>(null);
@@ -139,19 +161,35 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
     // Calculate effective columns based on order and visibility filter
     const effectiveColumnOrder = useMemo(() => {
         if (!visibleColumns) return colOrder;
-        return colOrder.filter(key => visibleColumns.includes(key));
+        // Ensure 'select' is always visible if it's in colOrder but not in visibleColumns (unless explicitly hidden logic added later)
+        // For now, let's assume visibleColumns controls everything, but 'select' is usually not togglable by user preference in standard UI,
+        // but here we allow it.
+        return colOrder.filter(key => visibleColumns.includes(key) || key === 'select');
     }, [colOrder, visibleColumns]);
 
     // Customize labels if roleKey is present
     const dynamicColumnLabels = useMemo(() => {
-        if (!roleKey) return COLUMN_LABELS;
-        return {
+        // Special case for Select column header
+        const baseLabels = {
             ...COLUMN_LABELS,
+            select: (
+                <input 
+                    type="checkbox" 
+                    checked={isAllSelected} 
+                    onChange={onToggleAll}
+                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                />
+            )
+        };
+
+        if (!roleKey) return baseLabels;
+        return {
+            ...baseLabels,
             price: <span className="text-indigo-700 font-bold">Цена ({roleKey})</span>,
             portions: <span className="text-gray-400">Порции</span>,
             special: <span className="text-gray-400">Спец.</span>
         };
-    }, [roleKey]);
+    }, [roleKey, isAllSelected, onToggleAll]);
 
     // --- Desktop Resize Logic ---
     const handleResizeMouseDown = (e: React.MouseEvent, key: string) => {
@@ -187,6 +225,10 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
 
     // --- Drag & Drop Logic (Desktop) ---
     const handleDragStart = (e: React.DragEvent, key: string) => {
+        if (key === 'select') {
+            e.preventDefault(); // Don't drag the selection column
+            return;
+        }
         setDraggedCol(key);
         e.dataTransfer.effectAllowed = 'move';
         setActiveResizeMenu(null); 
@@ -194,7 +236,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
 
     const handleDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
         e.preventDefault();
-        if (!draggedCol || draggedCol === targetKey) return;
+        if (!draggedCol || draggedCol === targetKey || targetKey === 'select') return;
 
         const currentOrder = [...colOrder];
         const draggedIdx = currentOrder.indexOf(draggedCol);
@@ -214,6 +256,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
 
     // --- Enhanced Touch Logic (Mobile Reorder with Ghost) ---
     const handleTouchStart = (e: React.TouchEvent, key: string) => {
+        if (key === 'select') return; // Don't drag selection column
         if ((e.target as HTMLElement).closest('.resize-btn')) return;
         
         const touch = e.touches[0];
@@ -266,7 +309,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
         
         if (headerCell && headerCell.dataset.colkey) {
             const targetKey = headerCell.dataset.colkey;
-            if (targetKey !== draggedCol) {
+            if (targetKey !== draggedCol && targetKey !== 'select') {
                  const currentOrder = [...colOrder];
                  const draggedIdx = currentOrder.indexOf(draggedCol);
                  const targetIdx = currentOrder.indexOf(targetKey);
@@ -323,7 +366,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                                 key={key}
                                 scope="col" 
                                 data-colkey={key}
-                                draggable
+                                draggable={key !== 'select'}
                                 onDragStart={(e) => handleDragStart(e, key)}
                                 onDragOver={(e) => handleDragOver(e, key)}
                                 onDragEnd={handleDragEnd}
@@ -339,7 +382,7 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                                 `}
                                 style={{ width: `${colWidths[key]}px`, minWidth: `${colWidths[key]}px` }}
                             >
-                                <div className={`flex items-center justify-center pointer-events-none w-full h-full ${draggedCol === key ? 'invisible' : ''}`}>
+                                <div className={`flex items-center justify-center w-full h-full ${draggedCol === key ? 'invisible' : ''}`}>
                                     <span className="truncate px-1">{dynamicColumnLabels[key]}</span>
                                 </div>
 
@@ -408,6 +451,8 @@ const ProductTable: React.FC<ProductTableProps> = ({ products, uspMarkups, setUs
                             onUpdatePriceTiers={onUpdatePriceTiers}
                             onUpdateTierPortions={onUpdateTierPortions}
                             onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
+                            isSelected={selectedIds?.has(product.id)}
+                            onToggleSelect={onToggleRow}
                             {...propsForRow}
                         />
                     ))}

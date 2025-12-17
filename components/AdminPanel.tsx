@@ -146,7 +146,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     // MoySklad state with persistence
     const [msLogin, setMsLogin] = useState(() => localStorage.getItem('ms_login') || '');
     const [msPassword, setMsPassword] = useState(() => localStorage.getItem('ms_password') || '');
-    const [msData, setMsData] = useState<any[]>([]);
+    const [msData, setMsData] = useState<any[]>(() => {
+        try {
+            const saved = localStorage.getItem('ms_data_cache');
+            return saved ? JSON.parse(saved) : [];
+        } catch(e) { return []; }
+    });
     const [msLoading, setMsLoading] = useState(false);
     const [msError, setMsError] = useState('');
     const [msUseProxy, setMsUseProxy] = useState(() => localStorage.getItem('ms_useProxy') !== 'false');
@@ -181,6 +186,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     useEffect(() => { localStorage.setItem('ms_useProxy', String(msUseProxy)); }, [msUseProxy]);
     useEffect(() => { localStorage.setItem('ms_autoRefresh', String(msAutoRefresh)); }, [msAutoRefresh]);
     useEffect(() => { localStorage.setItem('ms_fields', JSON.stringify(msFields)); }, [msFields]);
+    useEffect(() => { 
+        try {
+            localStorage.setItem('ms_data_cache', JSON.stringify(msData)); 
+        } catch(e) {
+            console.error("Failed to save MS data to local storage", e);
+        }
+    }, [msData]);
 
     // Badge state
     const [badgeText, setBadgeText] = useState('');

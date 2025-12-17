@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Product, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, Order, User, OrderStatus, CustomerType, Badge } from '../types';
 import ProductList from './ProductList';
 import CategoryDropdown from './CategoryDropdown';
@@ -137,20 +137,41 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // MoySklad state
-    const [msLogin, setMsLogin] = useState('');
-    const [msPassword, setMsPassword] = useState('');
+    // MoySklad state with persistence
+    const [msLogin, setMsLogin] = useState(() => localStorage.getItem('ms_login') || '');
+    const [msPassword, setMsPassword] = useState(() => localStorage.getItem('ms_password') || '');
     const [msData, setMsData] = useState<any[]>([]);
     const [msLoading, setMsLoading] = useState(false);
     const [msError, setMsError] = useState('');
-    const [msUseProxy, setMsUseProxy] = useState(true);
-    const [msFields, setMsFields] = useState({
-        name: true,
-        buyPrice: true,
-        salePrice: false,
-        article: false,
-        code: false
+    const [msUseProxy, setMsUseProxy] = useState(() => localStorage.getItem('ms_useProxy') !== 'false');
+    const [msAutoRefresh, setMsAutoRefresh] = useState(() => localStorage.getItem('ms_autoRefresh') === 'true');
+    const [msFields, setMsFields] = useState(() => {
+        try {
+            const saved = localStorage.getItem('ms_fields');
+            if (saved) return JSON.parse(saved);
+        } catch(e) {}
+        return {
+            name: true,
+            buyPrice: true,
+            salePrice: false,
+            article: false,
+            code: false,
+            description: false,
+            uom: false,
+            weight: false,
+            volume: false,
+            barcodes: false,
+        };
     });
+    // MoySklad Selection State
+    const [selectedMsIds, setSelectedMsIds] = useState<Set<string>>(new Set());
+
+    // Persistence Effects
+    useEffect(() => { localStorage.setItem('ms_login', msLogin); }, [msLogin]);
+    useEffect(() => { localStorage.setItem('ms_password', msPassword); }, [msPassword]);
+    useEffect(() => { localStorage.setItem('ms_useProxy', String(msUseProxy)); }, [msUseProxy]);
+    useEffect(() => { localStorage.setItem('ms_autoRefresh', String(msAutoRefresh)); }, [msAutoRefresh]);
+    useEffect(() => { localStorage.setItem('ms_fields', JSON.stringify(msFields)); }, [msFields]);
 
     // Badge state
     const [badgeText, setBadgeText] = useState('');
@@ -864,21 +885,24 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     }
 
     // --- MoySklad Logic ---
-    const handleLoadMoySklad = async () => {
+    const handleLoadMoySklad = useCallback(async (isSilent = false) => {
         setMsError('');
-        setMsLoading(true);
-        setMsData([]);
+        if (!isSilent) {
+            setMsLoading(true);
+            // setMsData([]); // Removed: Do not clear data immediately to prevent flickering
+            if (!isSilent) setSelectedMsIds(new Set()); // Only reset selection if manual full reload
+        }
 
         if (!msLogin || !msPassword) {
             setMsError('Введите логин и пароль.');
-            setMsLoading(false);
+            if (!isSilent) setMsLoading(false);
             return;
         }
 
         try {
             const auth = btoa(`${msLogin}:${msPassword}`);
             const limit = 1000; // Max allowed by MoySklad API per request page usually
-            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}`;
+            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom`;
             
             // Use CORS proxy if enabled
             const fetchUrl = msUseProxy 
@@ -909,7 +933,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     // salePrices is array, take first price value
                     salePrice: (item.salePrices && item.salePrices.length > 0) ? item.salePrices[0].value / 100 : 0,
                     article: item.article || '-',
-                    code: item.code || '-'
+                    code: item.code || '-',
+                    description: item.description || '-',
+                    uom: item.uom?.name || '-',
+                    weight: item.weight || 0,
+                    volume: item.volume || 0,
+                    barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-'
                 }));
                 setMsData(processed);
             } else {
@@ -920,13 +949,105 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             console.error("MoySklad Error:", error);
             setMsError(error.message || 'Ошибка подключения.');
         } finally {
-            setMsLoading(false);
+            if (!isSilent) setMsLoading(false);
         }
+    }, [msLogin, msPassword, msUseProxy]);
+
+    useEffect(() => {
+        let interval: ReturnType<typeof setInterval>;
+        if (msAutoRefresh && activeTab === 'moysklad' && msLogin && msPassword) {
+            // Poll every 5 seconds
+            interval = setInterval(() => {
+                handleLoadMoySklad(true); // Silent refresh
+            }, 5000);
+        }
+        return () => clearInterval(interval);
+    }, [msAutoRefresh, activeTab, msLogin, msPassword, handleLoadMoySklad]);
+
+    // Auto-load data if credentials exist but data is empty (e.g. on first load or refresh)
+    useEffect(() => {
+        if (activeTab === 'moysklad' && msLogin && msPassword && msData.length === 0 && !msLoading) {
+            handleLoadMoySklad(false);
+        }
+    }, [activeTab, msLogin, msPassword, msData.length, msLoading, handleLoadMoySklad]);
+
+    const handleMsToggleRow = (id: string) => {
+        setSelectedMsIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleMsToggleAll = () => {
+        if (selectedMsIds.size === msData.length) {
+            setSelectedMsIds(new Set());
+        } else {
+            setSelectedMsIds(new Set(msData.map(item => item.id)));
+        }
+    };
+
+    const handleAddSelectedToCatalog = () => {
+        if (selectedMsIds.size === 0) return;
+
+        const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
+        const productsToAdd: Omit<Product, 'id' | 'status'>[] = selectedItems.map(item => {
+            
+            // Logic to normalize Unit (UOM)
+            let unit: ProductUnit = 'pcs'; // default
+            const uomName = item.uom?.toLowerCase() || '';
+            if (uomName.includes('кг') || uomName.includes('kg') || uomName.includes('килограмм')) unit = 'kg';
+            else if (uomName.includes('л') || uomName.includes('l') || uomName.includes('литр')) unit = 'l';
+            else if (uomName.includes('г') || uomName.includes('g') || uomName.includes('грамм')) unit = 'g';
+            else if (uomName.includes('шт') || uomName.includes('pcs')) unit = 'pcs';
+
+            // Determine Packaging
+            let packaging: ProductPackaging = 'штука';
+            if (unit === 'kg') packaging = 'головка';
+            else if (unit === 'l') packaging = 'банка';
+            else if (unit === 'pcs') packaging = 'штука';
+
+            // Construct Description
+            let desc = item.description !== '-' ? item.description : '';
+            const extraInfo = [];
+            if (item.article !== '-') extraInfo.push(`Артикул: ${item.article}`);
+            if (item.code !== '-') extraInfo.push(`Код: ${item.code}`);
+            if (extraInfo.length > 0) {
+                desc = desc ? `${desc}\n\n${extraInfo.join(' | ')}` : extraInfo.join(' | ');
+            }
+
+            const allowedPortions: ProductPortion[] = ['whole'];
+            if (unit === 'kg') {
+                allowedPortions.push('half');
+                allowedPortions.push('quarter');
+            }
+
+            return {
+                name: item.name,
+                description: desc,
+                pricePerUnit: item.salePrice || 0,
+                costPrice: item.buyPrice || 0,
+                unitValue: item.weight > 0 ? item.weight : 1, // Logic: if weight from MS is 0, assume 1 unit.
+                unit: unit,
+                packaging: packaging,
+                categories: [], // Imported items have no category by default
+                imageUrls: [], // MoySklad API simple fetch doesn't include images easily
+                allowedPortions: allowedPortions,
+                priceOverridesPerUnit: {},
+                usp1UseGlobalMarkup: true,
+            };
+        });
+
+        onBulkAddProducts(productsToAdd);
+        alert(`Добавлено товаров в справочник: ${productsToAdd.length}`);
+        setSelectedMsIds(new Set()); // Clear selection
     };
 
 
     return (
         <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-sm px-0 py-2 sm:p-6 relative w-full">
+            {/* ... (Header and Tabs code remains same) ... */}
             <div className="mb-2 sm:mb-4 px-1 sm:px-0">
                 <button 
                     onClick={() => setIsIdInfoVisible(!isIdInfoVisible)}
@@ -1132,10 +1253,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
                             <h4 className="font-semibold text-gray-700 mb-3">Настройка полей</h4>
                             <p className="text-xs text-gray-500 mb-3">Выберите данные для выгрузки в таблицу:</p>
-                            <div className="space-y-2">
+                            <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <div className="flex items-center">
                                     <input type="checkbox" checked disabled className="h-4 w-4 text-indigo-600 border-gray-300 rounded opacity-50"/>
-                                    <label className="ml-2 text-sm text-gray-900">Наименование (обязательно)</label>
+                                    <label className="ml-2 text-sm text-gray-900">Наименование</label>
                                 </div>
                                 <div className="flex items-center">
                                     <input 
@@ -1144,7 +1265,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         onChange={e => setMsFields(prev => ({...prev, buyPrice: e.target.checked}))} 
                                         className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                                     />
-                                    <label className="ml-2 text-sm text-gray-900">Себестоимость (Закупочная)</label>
+                                    <label className="ml-2 text-sm text-gray-900">Себестоимость</label>
                                 </div>
                                 <div className="flex items-center">
                                     <input 
@@ -1173,10 +1294,68 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     />
                                     <label className="ml-2 text-sm text-gray-900">Код</label>
                                 </div>
+                                <div className="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={msFields.description} 
+                                        onChange={e => setMsFields(prev => ({...prev, description: e.target.checked}))} 
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 text-sm text-gray-900">Описание</label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={msFields.uom} 
+                                        onChange={e => setMsFields(prev => ({...prev, uom: e.target.checked}))} 
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 text-sm text-gray-900">Ед. изм.</label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={msFields.weight} 
+                                        onChange={e => setMsFields(prev => ({...prev, weight: e.target.checked}))} 
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 text-sm text-gray-900">Вес</label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={msFields.volume} 
+                                        onChange={e => setMsFields(prev => ({...prev, volume: e.target.checked}))} 
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 text-sm text-gray-900">Объем</label>
+                                </div>
+                                <div className="flex items-center">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={msFields.barcodes} 
+                                        onChange={e => setMsFields(prev => ({...prev, barcodes: e.target.checked}))} 
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 text-sm text-gray-900">Штрихкоды</label>
+                                </div>
                             </div>
-                            <div className="mt-4 flex justify-end">
+                            
+                            <div className="mt-4 flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="msAutoRefresh"
+                                        checked={msAutoRefresh}
+                                        onChange={e => setMsAutoRefresh(e.target.checked)}
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="msAutoRefresh" className="text-xs text-gray-600">
+                                        Авто-обновление цен (5 сек)
+                                    </label>
+                                </div>
                                 <button 
-                                    onClick={handleLoadMoySklad} 
+                                    onClick={() => handleLoadMoySklad(false)} 
                                     disabled={msLoading}
                                     className="bg-indigo-600 text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
                                 >
@@ -1202,26 +1381,63 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
                             <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
                                 <span className="font-semibold text-gray-700 text-sm">Найдено товаров: {msData.length}</span>
+                                {selectedMsIds.size > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-indigo-600 font-medium">Выбрано: {selectedMsIds.size}</span>
+                                        <button 
+                                            onClick={handleAddSelectedToCatalog}
+                                            className="bg-green-600 text-white text-xs font-bold py-1.5 px-3 rounded hover:bg-green-700 transition-colors"
+                                        >
+                                            Добавить в Справочник товаров
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="overflow-x-auto max-h-[600px]">
                                 <table className="min-w-full text-sm text-left text-gray-500">
                                     <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0">
                                         <tr>
+                                            <th className="px-4 py-3 w-10">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={msData.length > 0 && selectedMsIds.size === msData.length}
+                                                    onChange={handleMsToggleAll}
+                                                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                                />
+                                            </th>
                                             <th className="px-4 py-3">Наименование</th>
                                             {msFields.buyPrice && <th className="px-4 py-3">Себестоимость</th>}
                                             {msFields.salePrice && <th className="px-4 py-3">Цена</th>}
                                             {msFields.article && <th className="px-4 py-3">Артикул</th>}
                                             {msFields.code && <th className="px-4 py-3">Код</th>}
+                                            {msFields.description && <th className="px-4 py-3">Описание</th>}
+                                            {msFields.uom && <th className="px-4 py-3">Ед. изм.</th>}
+                                            {msFields.weight && <th className="px-4 py-3">Вес</th>}
+                                            {msFields.volume && <th className="px-4 py-3">Объем</th>}
+                                            {msFields.barcodes && <th className="px-4 py-3">Штрихкод</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {msData.map((item) => (
-                                            <tr key={item.id} className="bg-white border-b hover:bg-gray-50">
+                                            <tr key={item.id} className={`bg-white border-b hover:bg-gray-50 ${selectedMsIds.has(item.id) ? 'bg-indigo-50' : ''}`}>
+                                                <td className="px-4 py-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedMsIds.has(item.id)}
+                                                        onChange={() => handleMsToggleRow(item.id)}
+                                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                                    />
+                                                </td>
                                                 <td className="px-4 py-2 font-medium text-gray-900">{item.name}</td>
                                                 {msFields.buyPrice && <td className="px-4 py-2">{item.buyPrice.toLocaleString('ru-RU')} ₽</td>}
                                                 {msFields.salePrice && <td className="px-4 py-2">{item.salePrice.toLocaleString('ru-RU')} ₽</td>}
                                                 {msFields.article && <td className="px-4 py-2">{item.article}</td>}
                                                 {msFields.code && <td className="px-4 py-2">{item.code}</td>}
+                                                {msFields.description && <td className="px-4 py-2 max-w-xs truncate" title={item.description}>{item.description}</td>}
+                                                {msFields.uom && <td className="px-4 py-2">{item.uom}</td>}
+                                                {msFields.weight && <td className="px-4 py-2">{item.weight}</td>}
+                                                {msFields.volume && <td className="px-4 py-2">{item.volume}</td>}
+                                                {msFields.barcodes && <td className="px-4 py-2">{item.barcodes}</td>}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -1232,7 +1448,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             )}
 
-            {/* Keep existing tabs content below (table, visibility, etc.) - ensure no changes to them */}
+            {/* ... (Rest of existing content) ... */}
             {activeTab === 'products_master' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">

@@ -13,8 +13,13 @@ import VisibilityMatrix from './VisibilityMatrix';
 // Make TypeScript aware of the XLSX library loaded from the CDN
 declare var XLSX: any;
 
+// Defined in App.tsx but also valid here
+type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad';
+
 interface AdminPageProps {
     shopId: string;
+    activeTab: AdminTabType; // Controlled prop
+    onTabChange: (tab: AdminTabType) => void; // Controlled prop callback
     products: Product[];
     allCategories: string[];
     orders: Order[];
@@ -120,8 +125,8 @@ const CloudDownloadIcon: React.FC<{className?: string}> = ({ className }) => (
 );
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { shopId, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides } = props;
-    const [activeTab, setActiveTab] = useState<'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad'>('pricelist');
+    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides } = props;
+    
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -423,7 +428,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             await onAddProduct(newProduct);
             alert('Товар успешно добавлен!');
             resetForm();
-            setActiveTab('pricelist'); // Switch tab to view the new product
+            onTabChange('pricelist'); // Switch tab to view the new product
         } catch (error) {
             console.error("Error adding product:", error);
             alert("Ошибка при добавлении товара. Возможно, размер изображений слишком велик.");
@@ -870,11 +875,11 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         reader.readAsText(file);
     };
 
-    const TabButton: React.FC<{tabId: 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad', children: React.ReactNode}> = ({tabId, children}) => {
+    const TabButton: React.FC<{tabId: AdminTabType, children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
         return (
             <button
-                onClick={() => setActiveTab(tabId)}
+                onClick={() => onTabChange(tabId)}
                 className={`px-4 py-2 text-sm font-medium rounded-md focus:outline-none flex-shrink-0 whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:bg-gray-200'}`}
             >
                 {children}

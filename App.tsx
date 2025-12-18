@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES, Badge } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
@@ -573,36 +574,35 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       const product = products.find(p => p.id === productId);
       if (!product) return;
 
-      const { role, costPrice, markupValue, markupType, ...others } = newUspPrices;
-      let updatedPayload: any = { ...others };
+      const { role, costPrice, markupValue, markupType } = newUspPrices;
+      const updatedPayload: any = {};
 
-      // 1. Determine the final Cost Price
-      // If costPrice is explicitly in props, it means we are setting it globally
+      // 1. Прямая проверка наличия ключа costPrice для поддержки перехода от пустой ячейки к значению
       const hasNewCost = newUspPrices.hasOwnProperty('costPrice');
-      const finalCost = hasNewCost ? (costPrice ?? 0) : (product.costPrice || 0);
-      
       if (hasNewCost) {
           updatedPayload.costPrice = costPrice;
       }
 
-      // 2. Update markup rule for the specified role if provided
+      const finalCost = hasNewCost ? (costPrice ?? 0) : (product.costPrice || 0);
+
+      // 2. Обновляем правила наценки для конкретной роли, если они переданы
       const currentMarkups = { ...(product.tierMarkups || {}) };
-      if (role) {
+      if (role && (markupValue !== undefined || markupType !== undefined)) {
           currentMarkups[role] = {
-              value: markupValue,
+              value: markupValue !== undefined ? markupValue : currentMarkups[role]?.value,
               type: markupType || (currentMarkups[role]?.type) || 'percent'
           };
           updatedPayload.tierMarkups = currentMarkups;
       }
 
-      // 3. FORCE recalculation of ALL prices that depend on markups
-      // This is the core logic that syncs cost changes across all price lists
+      // 3. ПРИНУДИТЕЛЬНЫЙ ПЕРЕСЧЕТ ВСЕХ ЦЕН, зависящих от наценок
+      // Это ядро синхронизации себестоимости со всеми прайс-листами
       const newTiers = { ...(product.priceTiers || {}) };
       let newBasePrice = product.pricePerUnit;
 
       Object.keys(currentMarkups).forEach(r => {
           const m = currentMarkups[r];
-          // Recalculate only if there's a markup rule and cost > 0
+          // Пересчитываем только если есть правило наценки и себестоимость > 0
           if (m && m.value !== undefined && finalCost > 0) {
               const calculated = m.type === 'percent' 
                 ? Math.round(finalCost * (1 + m.value / 100)) 

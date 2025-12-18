@@ -87,6 +87,7 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
         setIsDirty(false);
     };
 
+    // --- FIX: Defined handleReset to revert local state to product values and clear dirty flag ---
     const handleReset = () => {
         setEditedTiers(product.priceTiers || {});
         setLocalCost(product.costPrice?.toString() || '');
@@ -94,6 +95,15 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
         setMarkupValue(markup?.value?.toString() || '');
         setMarkupType(markup?.type || 'percent');
         setIsDirty(false);
+    };
+
+    const handleCostBlur = () => {
+        const numCost = localCost === '' ? undefined : parseFloat(localCost);
+        if (numCost !== product.costPrice) {
+            onUpdateProductCostPrice(product.id, numCost);
+            if (markupValue) applyMarkupToAllTiers(markupValue, markupType, numCost);
+        }
+        handleSave();
     };
 
     const handleMarkupBlur = () => { handleSave(); };
@@ -108,8 +118,10 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
                 <input 
                     type="number" 
                     value={localCost} 
-                    readOnly
-                    className={`${baseInputClasses} bg-gray-100 text-gray-400 cursor-not-allowed font-medium border-gray-200`} 
+                    onChange={(e) => { setLocalCost(e.target.value); setIsDirty(true); }}
+                    onBlur={handleCostBlur}
+                    onKeyDown={(e) => { if(e.key === 'Enter') e.currentTarget.blur() }}
+                    className={`${baseInputClasses} bg-white font-medium border-indigo-200`} 
                     placeholder="-"
                 />
             </td>
@@ -154,6 +166,7 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
                     <button onClick={handleSave} disabled={!isDirty} className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
                         Сохранить
                     </button>
+                    {/* --- FIX: Updated reset button to use handleReset --- */}
                     <button onClick={handleReset} disabled={!isDirty} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                         Сброс
                     </button>

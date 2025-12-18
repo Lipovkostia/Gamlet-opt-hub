@@ -45,7 +45,7 @@ const TruckIcon: React.FC<{ className?: string; itemCount?: number }> = ({ class
         <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             {renderBoxes()}
             <path strokeLinecap="round" strokeLinejoin="round" d="M1 17h2.5" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.5(17h5.5" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 17h5.5" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 17h2.5" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M1 12h12v5H1z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 12l3-4h5v9h-8v-5z" />
@@ -475,11 +475,19 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleProductUpdate = async (productId: string, update: Partial<Product> | any) => {
     try {
         if (db) {
+            // Clean undefined values from update object before sending to Firestore
+            const cleanUpdate: any = {};
+            Object.keys(update).forEach(key => {
+                if (update[key] !== undefined) {
+                    cleanUpdate[key] = update[key];
+                }
+            });
+
             const productRef = doc(db, "shops", shopId, "products", productId);
-            await updateDoc(productRef, update);
-            setProducts(prevProducts => prevProducts.map(p => (p.id === productId ? { ...p, ...update } : p)));
+            await updateDoc(productRef, cleanUpdate);
+            setProducts(prevProducts => prevProducts.map(p => (p.id === productId ? { ...p, ...cleanUpdate } : p)));
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Firestore Update Error:", err); }
   };
 
   const handleAddNewProduct = async (newProductData: Omit<Product, 'id' | 'status'>) => {
@@ -574,35 +582,44 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       const product = products.find(p => p.id === productId);
       if (!product) return;
 
-      const { role, costPrice, markupValue, markupType } = newUspPrices;
-      const updatedPayload: any = {};
+      const { role, costPrice, markupValue, markupType, ...others } = newUspPrices;
+      let updatedPayload: any = { ...others };
 
-      // 1. Прямая проверка наличия ключа costPrice для поддержки перехода от пустой ячейки к значению
+      // 1. Determine the final Cost Price
+      // Use hasOwnProperty to distinguish between explicitly passed 0 and missing costPrice
       const hasNewCost = newUspPrices.hasOwnProperty('costPrice');
+      const finalCost = hasNewCost ? (costPrice ?? 0) : (product.costPrice || 0);
+      
       if (hasNewCost) {
-          updatedPayload.costPrice = costPrice;
+          updatedPayload.costPrice = costPrice === undefined ? 0 : costPrice;
       }
 
-      const finalCost = hasNewCost ? (costPrice ?? 0) : (product.costPrice || 0);
-
-      // 2. Обновляем правила наценки для конкретной роли, если они переданы
+      // 2. Update markup rule for the specified role if provided
       const currentMarkups = { ...(product.tierMarkups || {}) };
-      if (role && (markupValue !== undefined || markupType !== undefined)) {
-          currentMarkups[role] = {
-              value: markupValue !== undefined ? markupValue : currentMarkups[role]?.value,
-              type: markupType || (currentMarkups[role]?.type) || 'percent'
+      if (role) {
+          // Construct markup object, ensuring we don't put undefined in required fields
+          const existingRule = currentMarkups[role];
+          const newRule: any = {
+              type: markupType || existingRule?.type || 'percent'
           };
+          // Only set value if it was provided or already exists
+          if (markupValue !== undefined) {
+              newRule.value = markupValue;
+          } else if (existingRule?.value !== undefined) {
+              newRule.value = existingRule.value;
+          }
+
+          currentMarkups[role] = newRule;
           updatedPayload.tierMarkups = currentMarkups;
       }
 
-      // 3. ПРИНУДИТЕЛЬНЫЙ ПЕРЕСЧЕТ ВСЕХ ЦЕН, зависящих от наценок
-      // Это ядро синхронизации себестоимости со всеми прайс-листами
+      // 3. FORCE recalculation of ALL prices that depend on markups
       const newTiers = { ...(product.priceTiers || {}) };
       let newBasePrice = product.pricePerUnit;
 
       Object.keys(currentMarkups).forEach(r => {
           const m = currentMarkups[r];
-          // Пересчитываем только если есть правило наценки и себестоимость > 0
+          // Recalculate only if there's a markup rule value and cost > 0
           if (m && m.value !== undefined && finalCost > 0) {
               const calculated = m.type === 'percent' 
                 ? Math.round(finalCost * (1 + m.value / 100)) 

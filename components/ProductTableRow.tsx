@@ -204,27 +204,16 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const handleUspPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         const newVal = value === '' ? undefined : parseFloat(value);
-        
-        // 1. Немедленно обновляем локальное состояние для плавности ввода
         setEditedProduct(prev => ({ ...prev, [name]: newVal }));
         setIsDirty(true);
 
-        // 2. Если мы в режиме Справочника и меняем себестоимость — сохраняем немедленно
-        if (isMasterView && name === 'costPrice') {
-            // Если введено число или пустая строка (сброс) — отправляем в базу
-            if (value === '' || !isNaN(newVal!)) {
-                onUpdateUspPrices(product.id, { costPrice: newVal });
-            }
-        }
-
-        // 3. Логика предпросмотра цены в строке при изменении себестоимости
-        if (name === 'costPrice' && newVal !== undefined && !isNaN(newVal) && markupValue) {
+        if (name === 'costPrice' && newVal !== undefined && markupValue) {
             const val = parseFloat(markupValue);
             if (!isNaN(val)) {
                 const newPrice = calculateMarkup(newVal, val, markupType);
                 if (newPrice > 0) {
                     if (roleKey) setTierPrice(newPrice.toString());
-                    else setEditedProduct(prev => ({ ...prev, pricePerUnit: newPrice }));
+                    else setEditedProduct(prev => ({ ...prev, pricePerUnit: newPrice, costPrice: newVal }));
                 }
             }
         }
@@ -296,9 +285,12 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         const mVal = markupValue === '' ? undefined : parseFloat(markupValue);
         const currentMarkupRule = product.tierMarkups?.[currentRoleKey];
         
-        // ВАЖНО: Мы сохраняем правила наценки. Себестоимость для Справочника уже сохранена в onChange.
-        if (mVal !== currentMarkupRule?.value || markupType !== currentMarkupRule?.type) {
-            onUpdateUspPrices(product.id, { markupValue: mVal, markupType, role: currentRoleKey });
+        // Improved cost comparison handles transitions from undefined/null correctly
+        const costChanged = editedProduct.costPrice !== product.costPrice && 
+                           !(editedProduct.costPrice === undefined && product.costPrice === undefined);
+
+        if (mVal !== currentMarkupRule?.value || markupType !== currentMarkupRule?.type || costChanged) {
+            onUpdateUspPrices(product.id, { costPrice: editedProduct.costPrice, markupValue: mVal, markupType, role: currentRoleKey });
         }
 
         if (!roleKey && editedProduct.usp1UseGlobalMarkup !== product.usp1UseGlobalMarkup) onUpdateUspMarkupFlags(product.id, { usp1UseGlobalMarkup: editedProduct.usp1UseGlobalMarkup });
@@ -464,8 +456,7 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                     onChange={handleUspPriceChange} 
                     onBlur={handleSave} 
                     onKeyDown={handleKeyDown} 
-                    readOnly={!isMasterView}
-                    className={`${flushInputClasses} ${!isMasterView ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' : 'bg-white border-indigo-100 font-medium'}`} 
+                    className={`${flushInputClasses} bg-white border-indigo-100 font-medium`} 
                     placeholder="-" 
                 />
             </td>

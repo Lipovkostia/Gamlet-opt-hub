@@ -12,7 +12,7 @@ interface ProductTableRowProps {
     onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void;
     onUpdateTierPortions?: (productId: string, role: string, portions: ProductPortion[]) => void;
     onUpdateTierPriceOverrides?: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
-    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
+    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; markupValue?: number; markupType?: 'percent' | 'fixed'; role?: string; }) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
     onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
     onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
@@ -22,8 +22,9 @@ interface ProductTableRowProps {
     roles?: string[];
     columnOrder?: string[];
     roleKey?: string;
-    isSelected?: boolean; // New prop
-    onToggleSelect?: (productId: string) => void; // New prop
+    isSelected?: boolean;
+    onToggleSelect?: (productId: string) => void;
+    isMasterView?: boolean;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -47,19 +48,6 @@ const EyeIcon: React.FC<{className?: string}> = ({className}) => (
 const TrashIcon: React.FC<{className?: string}> = ({className}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-);
-
-const CameraIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-);
-
-const PlusIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
     </svg>
 );
 
@@ -90,14 +78,16 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     onUpdateUnitValue, 
     onUpdateDetails, 
     onUpdateCategories, 
-    onUpdateImages, 
+    onUpdateImages,
     onUpdateVisibility, 
     roles = [],
     columnOrder = ['select', 'status', 'photo', 'name', 'description', 'categories', 'visibility', 'price', 'value', 'portions', 'special', 'cost', 'actions'],
     roleKey,
     isSelected = false,
-    onToggleSelect
+    onToggleSelect,
+    isMasterView = false
 }) => {
+    const currentRoleKey = roleKey || 'retail';
     const [editedProduct, setEditedProduct] = useState(product);
     const [tierPrice, setTierPrice] = useState<string>(
         roleKey && product.priceTiers ? (product.priceTiers[roleKey]?.toString() || '') : ''
@@ -112,6 +102,10 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const [isActionsMenuOpen, setActionsMenuOpen] = useState(false);
     const actionsMenuRef = useRef<HTMLDivElement>(null);
     
+    const initialMarkup = product.tierMarkups?.[currentRoleKey] || { type: 'percent', value: undefined };
+    const [markupType, setMarkupType] = useState<'percent' | 'fixed'>(initialMarkup.type);
+    const [markupValue, setMarkupValue] = useState<string>(initialMarkup.value?.toString() || '');
+
     const [isImageEditorOpen, setImageEditorOpen] = useState(false);
     const [isCameraActive, setIsCameraActive] = useState(false);
     const imageEditorRef = useRef<HTMLDivElement>(null);
@@ -119,26 +113,23 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
-    // Styles definitions
-    // Flush inputs for main data cells (0px distance visually)
     const flushInputClasses = "block w-full h-full px-2 py-1.5 border-0 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-xs bg-transparent rounded-none focus:outline-none placeholder-gray-300 leading-tight";
     const flushSelectClasses = "block w-full h-full px-1 py-1.5 border-0 focus:ring-2 focus:ring-inset focus:ring-indigo-500 text-xs bg-transparent rounded-none cursor-pointer focus:outline-none leading-tight";
-    
-    // Nested inputs for complex cells (like Special Prices) that sit inside a container
     const nestedInputClasses = "block w-full px-1 py-0.5 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded-sm bg-white h-6";
-
-    // Cell Base Styles
     const baseCellClasses = "border-r border-b border-gray-300 align-middle transition-colors";
-    const cellPadded = `${baseCellClasses} px-1 py-1`; // For cells with buttons/complex content
-    const cellFlush = `${baseCellClasses} p-0 h-8`; // For cells with full-width inputs
+    const cellPadded = `${baseCellClasses} px-1 py-1`;
+    const cellFlush = `${baseCellClasses} p-0 h-8`;
 
     useEffect(() => {
         setEditedProduct(product);
         if (roleKey) {
             setTierPrice(product.priceTiers?.[roleKey]?.toString() || '');
         }
+        const markup = product.tierMarkups?.[currentRoleKey] || { type: 'percent', value: undefined };
+        setMarkupValue(markup.value?.toString() || '');
+        setMarkupType(markup.type || 'percent');
         setIsDirty(false);
-    }, [product, roleKey]);
+    }, [product, roleKey, currentRoleKey]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -158,16 +149,40 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         }
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [categoryEditorRef, roleEditorRef, imageEditorRef, actionsMenuRef]);
-
-     useEffect(() => {
-        // Cleanup camera stream
-        return () => {
-            if (videoRef.current && videoRef.current.srcObject) {
-                (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-            }
-        };
     }, []);
+
+    const calculateMarkup = (cost: number, mValue: number, mType: 'percent' | 'fixed') => {
+        if (isNaN(cost) || cost === 0) return 0;
+        return mType === 'percent' ? Math.round(cost * (1 + mValue / 100)) : Math.round(cost + mValue);
+    };
+
+    const handleMarkupChange = (newVal: string) => {
+        setMarkupValue(newVal);
+        const val = parseFloat(newVal);
+        setIsDirty(true);
+        const activeCost = editedProduct.costPrice || product.costPrice;
+        if (!isNaN(val) && activeCost) {
+            const newPrice = calculateMarkup(activeCost, val, markupType);
+            if (newPrice > 0) {
+                if (roleKey) setTierPrice(newPrice.toString());
+                else setEditedProduct(prev => ({ ...prev, pricePerUnit: newPrice }));
+            }
+        }
+    };
+
+    const handleMarkupTypeChange = (newType: 'percent' | 'fixed') => {
+        setMarkupType(newType);
+        setIsDirty(true);
+        const val = parseFloat(markupValue);
+        const activeCost = editedProduct.costPrice || product.costPrice;
+        if (!isNaN(val) && activeCost) {
+            const newPrice = calculateMarkup(activeCost, val, newType);
+            if (newPrice > 0) {
+                if (roleKey) setTierPrice(newPrice.toString());
+                else setEditedProduct(prev => ({ ...prev, pricePerUnit: newPrice }));
+            }
+        }
+    };
 
     const handleGenericChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -188,24 +203,31 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
 
     const handleUspPriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setEditedProduct(prev => ({ ...prev, [name]: value === '' ? undefined : parseFloat(value) }));
+        const newVal = value === '' ? undefined : parseFloat(value);
+        setEditedProduct(prev => ({ ...prev, [name]: newVal }));
         setIsDirty(true);
+
+        if (name === 'costPrice' && newVal !== undefined && markupValue) {
+            const val = parseFloat(markupValue);
+            if (!isNaN(val)) {
+                const newPrice = calculateMarkup(newVal, val, markupType);
+                if (newPrice > 0) {
+                    if (roleKey) setTierPrice(newPrice.toString());
+                    else setEditedProduct(prev => ({ ...prev, pricePerUnit: newPrice, costPrice: newVal }));
+                }
+            }
+        }
     };
 
     const handlePriceOverrideChange = (portion: 'half' | 'quarter', value: string) => {
         const numValue = value === '' ? undefined : parseFloat(value);
         setEditedProduct(prev => {
-            // Logic for specific Tier context
             if (roleKey) {
                 const currentOverrides = prev.tierPriceOverrides?.[roleKey] || {};
                 const newOverrides = { ...currentOverrides, [portion]: numValue };
                 if (numValue === undefined) delete newOverrides[portion];
-                return { 
-                    ...prev, 
-                    tierPriceOverrides: { ...prev.tierPriceOverrides, [roleKey]: newOverrides } 
-                };
+                return { ...prev, tierPriceOverrides: { ...prev.tierPriceOverrides, [roleKey]: newOverrides } };
             }
-            // Logic for Global/Base context
             const newOverrides = { ...prev.priceOverridesPerUnit, [portion]: numValue };
             if (numValue === undefined) delete newOverrides[portion];
             return { ...prev, priceOverridesPerUnit: newOverrides };
@@ -216,47 +238,23 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const handlePortionToggle = (portion: ProductPortion) => {
         if (portion === 'whole') return;
         setEditedProduct(prev => {
-            // Determine active portions for current context
-            let currentList: ProductPortion[];
-            if (roleKey) {
-                currentList = prev.tierPortions?.[roleKey] ?? prev.allowedPortions;
-            } else {
-                currentList = prev.allowedPortions;
-            }
-
-            const newList = currentList.includes(portion)
-                ? currentList.filter(p => p !== portion)
-                : [...currentList, portion];
-            
-            if (roleKey) {
-                return { ...prev, tierPortions: { ...prev.tierPortions, [roleKey]: newList } };
-            } else {
-                return { ...prev, allowedPortions: newList };
-            }
+            let currentList = roleKey ? (prev.tierPortions?.[roleKey] ?? prev.allowedPortions) : prev.allowedPortions;
+            const newList = currentList.includes(portion) ? currentList.filter(p => p !== portion) : [...currentList, portion];
+            return roleKey ? { ...prev, tierPortions: { ...prev.tierPortions, [roleKey]: newList } } : { ...prev, allowedPortions: newList };
         });
         setIsDirty(true);
     }
     
     const handleCategoryToggle = (category: string) => {
         const newCategories = new Set(editedProduct.categories);
-        if (newCategories.has(category)) {
-            newCategories.delete(category);
-        } else {
-            newCategories.add(category);
-        }
+        newCategories.has(category) ? newCategories.delete(category) : newCategories.add(category);
         setEditedProduct(prev => ({...prev, categories: Array.from(newCategories)}));
         setIsDirty(true);
     };
 
     const handleRoleToggle = (role: CustomerType) => {
         const currentRoles = editedProduct.visibleToRoles || [];
-        
-        let newRoles: CustomerType[];
-        if (currentRoles.includes(role)) {
-            newRoles = currentRoles.filter(r => r !== role);
-        } else {
-            newRoles = [...currentRoles, role];
-        }
+        const newRoles = currentRoles.includes(role) ? currentRoles.filter(r => r !== role) : [...currentRoles, role];
         setEditedProduct(prev => ({...prev, visibleToRoles: newRoles}));
         setIsDirty(true);
     };
@@ -264,129 +262,58 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
     const handleAddNewCategory = () => {
         const trimmed = newCategory.trim();
         if (trimmed && !editedProduct.categories.includes(trimmed)) {
-           const newCategories = new Set([...editedProduct.categories, trimmed]);
-           setEditedProduct(prev => ({...prev, categories: Array.from(newCategories)}));
+           setEditedProduct(prev => ({...prev, categories: [...prev.categories, trimmed]}));
            setNewCategory('');
            setIsDirty(true);
         }
     };
     
-    const allPossibleCategories = useMemo(() => {
-        const combined = new Set([...allCategories, ...editedProduct.categories]);
-        return Array.from(combined).sort();
-    }, [allCategories, editedProduct.categories]);
+    const allPossibleCategories = useMemo(() => Array.from(new Set([...allCategories, ...editedProduct.categories])).sort(), [allCategories, editedProduct.categories]);
+    const currentPortions = useMemo(() => roleKey ? (editedProduct.tierPortions?.[roleKey] ?? editedProduct.allowedPortions) : editedProduct.allowedPortions, [editedProduct, roleKey]);
+    const currentOverrides = useMemo(() => roleKey ? (editedProduct.tierPriceOverrides?.[roleKey] ?? {}) : editedProduct.priceOverridesPerUnit, [editedProduct, roleKey]);
 
-    // Helpers to get current values for rendering
-    const currentPortions = useMemo(() => {
-        if (roleKey) {
-            return editedProduct.tierPortions?.[roleKey] ?? editedProduct.allowedPortions;
-        }
-        return editedProduct.allowedPortions;
-    }, [editedProduct, roleKey]);
-
-    const currentOverrides = useMemo(() => {
-        if (roleKey) {
-            return editedProduct.tierPriceOverrides?.[roleKey] ?? {};
-        }
-        return editedProduct.priceOverridesPerUnit;
-    }, [editedProduct, roleKey]);
-
-
-    // Auto-save logic
     const handleSave = () => {
         if (!isDirty) return;
         
-        // General updates - compare to avoid redundant writes
-        if (editedProduct.name !== product.name || 
-            editedProduct.description !== product.description || 
-            editedProduct.unit !== product.unit || 
-            editedProduct.packaging !== product.packaging) {
+        if (editedProduct.name !== product.name || editedProduct.description !== product.description || editedProduct.unit !== product.unit || editedProduct.packaging !== product.packaging) {
             onUpdateDetails(product.id, { name: editedProduct.name, description: editedProduct.description, unit: editedProduct.unit, packaging: editedProduct.packaging });
         }
-
-        if (editedProduct.unitValue !== product.unitValue) {
-            onUpdateUnitValue(product.id, editedProduct.unitValue);
-        }
-
-        if (JSON.stringify(editedProduct.categories) !== JSON.stringify(product.categories)) {
-            onUpdateCategories(product.id, editedProduct.categories);
-        }
-
-        if (JSON.stringify(editedProduct.visibleToRoles) !== JSON.stringify(product.visibleToRoles)) {
-            onUpdateVisibility(product.id, editedProduct.visibleToRoles || []);
-        }
+        if (editedProduct.unitValue !== product.unitValue) onUpdateUnitValue(product.id, editedProduct.unitValue);
+        if (JSON.stringify(editedProduct.categories) !== JSON.stringify(product.categories)) onUpdateCategories(product.id, editedProduct.categories);
+        if (JSON.stringify(editedProduct.visibleToRoles) !== JSON.stringify(product.visibleToRoles)) onUpdateVisibility(product.id, editedProduct.visibleToRoles || []);
         
-        // Only update cost prices if we are NOT in a specific role price list view (Root view)
-        if (!roleKey) {
-            const uspUpdates: { costPrice?: number; usp1Price?: number } = {};
-            // Check if values changed and are defined (avoid sending undefined to Firestore)
-            if (editedProduct.costPrice !== product.costPrice && editedProduct.costPrice !== undefined) {
-                uspUpdates.costPrice = editedProduct.costPrice;
-            }
-            if (editedProduct.usp1Price !== product.usp1Price && editedProduct.usp1Price !== undefined) {
-                uspUpdates.usp1Price = editedProduct.usp1Price;
-            }
-            
-            if (Object.keys(uspUpdates).length > 0) {
-                onUpdateUspPrices(product.id, uspUpdates);
-            }
-
-            if (editedProduct.usp1UseGlobalMarkup !== product.usp1UseGlobalMarkup) {
-                onUpdateUspMarkupFlags(product.id, {
-                    usp1UseGlobalMarkup: editedProduct.usp1UseGlobalMarkup,
-                });
-            }
+        const mVal = markupValue === '' ? undefined : parseFloat(markupValue);
+        const currentMarkupRule = product.tierMarkups?.[currentRoleKey];
+        if (mVal !== currentMarkupRule?.value || markupType !== currentMarkupRule?.type || editedProduct.costPrice !== product.costPrice) {
+            onUpdateUspPrices(product.id, { costPrice: editedProduct.costPrice, markupValue: mVal, markupType, role: currentRoleKey });
         }
 
-        // Portions & Special Prices Logic
+        if (!roleKey && editedProduct.usp1UseGlobalMarkup !== product.usp1UseGlobalMarkup) onUpdateUspMarkupFlags(product.id, { usp1UseGlobalMarkup: editedProduct.usp1UseGlobalMarkup });
+
         if (roleKey) {
-            // Tier Specific Save
             if (onUpdateTierPortions) {
-                const portions = editedProduct.tierPortions?.[roleKey] ?? currentPortions; // Use current/fallback if not in dirty state map yet
-                // Compare with original to avoid redundant writes
-                const originalTierPortions = product.tierPortions?.[roleKey];
-                // Deep comparison simplified: stringify
-                if (JSON.stringify(portions) !== JSON.stringify(originalTierPortions)) {
-                     onUpdateTierPortions(product.id, roleKey, portions);
-                }
+                const portions = editedProduct.tierPortions?.[roleKey] ?? currentPortions;
+                if (JSON.stringify(portions) !== JSON.stringify(product.tierPortions?.[roleKey])) onUpdateTierPortions(product.id, roleKey, portions);
             }
             if (onUpdateTierPriceOverrides) {
                 const overrides = editedProduct.tierPriceOverrides?.[roleKey] ?? {};
-                if (JSON.stringify(overrides) !== JSON.stringify(product.tierPriceOverrides?.[roleKey])) {
-                    onUpdateTierPriceOverrides(product.id, roleKey, overrides);
-                }
+                if (JSON.stringify(overrides) !== JSON.stringify(product.tierPriceOverrides?.[roleKey])) onUpdateTierPriceOverrides(product.id, roleKey, overrides);
             }
         } else {
-            // Global Save
             const originalPortions = new Set(product.allowedPortions);
             const newPortions = new Set(editedProduct.allowedPortions);
             if (originalPortions.has('half') !== newPortions.has('half')) onUpdatePortions(product.id, 'half');
             if (originalPortions.has('quarter') !== newPortions.has('quarter')) onUpdatePortions(product.id, 'quarter');
-
-            // Base Prices & Overrides (Global)
-            const basePriceChanged = editedProduct.pricePerUnit !== product.pricePerUnit;
-            const overridesChanged = JSON.stringify(editedProduct.priceOverridesPerUnit) !== JSON.stringify(product.priceOverridesPerUnit);
-            
-            if (basePriceChanged || overridesChanged) {
-                 onUpdatePrices(product.id, { 
-                     pricePerUnit: editedProduct.pricePerUnit, 
-                     priceOverridesPerUnit: editedProduct.priceOverridesPerUnit 
-                 });
+            if (editedProduct.pricePerUnit !== product.pricePerUnit || JSON.stringify(editedProduct.priceOverridesPerUnit) !== JSON.stringify(product.priceOverridesPerUnit)) {
+                 onUpdatePrices(product.id, { pricePerUnit: editedProduct.pricePerUnit, priceOverridesPerUnit: editedProduct.priceOverridesPerUnit });
             }
         }
 
-        // Price Tiers (Role Specific Base Price)
         if (roleKey && onUpdatePriceTiers) {
             const newPrice = tierPrice === '' ? undefined : parseFloat(tierPrice);
-            const currentPrice = product.priceTiers?.[roleKey];
-            
-            if (newPrice !== currentPrice) {
+            if (newPrice !== product.priceTiers?.[roleKey]) {
                 const newTiers = { ...product.priceTiers };
-                if (newPrice !== undefined && !isNaN(newPrice)) {
-                    newTiers[roleKey] = newPrice;
-                } else {
-                    delete newTiers[roleKey];
-                }
+                (newPrice !== undefined && !isNaN(newPrice)) ? newTiers[roleKey] = newPrice : delete newTiers[roleKey];
                 onUpdatePriceTiers(product.id, newTiers);
             }
         }
@@ -396,135 +323,18 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         setTimeout(() => setShowSaved(false), 2000);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            e.currentTarget.blur(); // Trigger blur to save
-        }
-    };
-
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => { if (e.key === 'Enter') e.currentTarget.blur(); };
     const handleReset = () => {
         setEditedProduct(product);
-        if (roleKey) {
-            setTierPrice(product.priceTiers?.[roleKey]?.toString() || '');
-        }
+        if (roleKey) setTierPrice(product.priceTiers?.[roleKey]?.toString() || '');
+        const markup = product.tierMarkups?.[currentRoleKey] || { type: 'percent', value: undefined };
+        setMarkupValue(markup.value?.toString() || '');
+        setMarkupType(markup.type || 'percent');
         setIsDirty(false);
     };
 
-    const handleDeleteImage = (indexToDelete: number) => {
-        if (product.imageUrls.length <= 1) {
-            alert('Нельзя удалить последнее изображение.');
-            return;
-        }
-        const newImageUrls = product.imageUrls.filter((_, index) => index !== indexToDelete);
-        onUpdateImages(product.id, newImageUrls);
-    };
-
-    // Helper to compress images before upload
-    const compressImage = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target?.result as string;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    const MAX_HEIGHT = 800;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height *= MAX_WIDTH / width;
-                            width = MAX_WIDTH;
-                        }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width *= MAX_HEIGHT / height;
-                            height = MAX_HEIGHT;
-                        }
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        ctx.drawImage(img, 0, 0, width, height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.7));
-                    } else {
-                        reject(new Error("Canvas context missing"));
-                    }
-                };
-                img.onerror = (err) => reject(err);
-            };
-            reader.onerror = (err) => reject(err);
-        });
-    };
-
-    const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files) {
-            const files = Array.from(event.target.files);
-            try {
-                const base64Promises = files.map(compressImage);
-                const newBase64Urls = await Promise.all(base64Promises);
-                onUpdateImages(product.id, [...product.imageUrls, ...newBase64Urls]);
-            } catch (error) {
-                console.error("Error compressing/loading images:", error);
-                alert("Не удалось загрузить изображения.");
-            }
-        }
-    };
-
-    const handleAddFromFileClick = () => {
-        fileInputRef.current?.click();
-    };
-    
-    const handleOpenCamera = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-            }
-            setIsCameraActive(true);
-        } catch (err) {
-            console.error("Error accessing camera:", err);
-            alert("Не удалось получить доступ к камере.");
-        }
-    };
-    
     const stopCamera = () => {
-        if (videoRef.current && videoRef.current.srcObject) {
-            (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
-        setIsCameraActive(false);
-    };
-    
-    const handleTakePicture = () => {
-        if (!videoRef.current || !canvasRef.current) return;
-        
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const MAX_DIM = 1000;
-        let w = video.videoWidth;
-        let h = video.videoHeight;
-        
-        if (w > MAX_DIM || h > MAX_DIM) {
-             const ratio = w / h;
-             if (w > h) { w = MAX_DIM; h = MAX_DIM / ratio; }
-             else { h = MAX_DIM; w = MAX_DIM * ratio; }
-        }
-
-        canvas.width = w;
-        canvas.height = h;
-        
-        const context = canvas.getContext('2d');
-        if (context) {
-            context.drawImage(video, 0, 0, w, h);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            onUpdateImages(product.id, [...product.imageUrls, dataUrl]);
-        }
-        stopCamera();
+        if (videoRef.current && videoRef.current.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
     };
 
     const getStatusInfo = () => {
@@ -538,65 +348,38 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
 
     const StatusInfo = getStatusInfo();
 
-    // Map content for each cell type
     const cells: Record<string, React.ReactNode> = {
         select: (
             <td key="select" className={`${cellPadded} text-center w-8`}>
-                <input 
-                    type="checkbox" 
-                    checked={isSelected} 
-                    onChange={() => onToggleSelect && onToggleSelect(product.id)}
-                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
-                />
+                <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect && onToggleSelect(product.id)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"/>
             </td>
         ),
         status: (
             <td key="status" className={`${cellPadded} text-center`}>
-                <button onClick={() => onCycleStatus(product.id)} className={`p-1 rounded hover:bg-gray-200 ${StatusInfo.color}`} title={StatusInfo.label}>
-                    <StatusInfo.Icon className="w-4 h-4"/>
-                </button>
+                <button onClick={() => onCycleStatus(product.id)} className={`p-1 rounded hover:bg-gray-200 ${StatusInfo.color}`} title={StatusInfo.label}><StatusInfo.Icon className="w-4 h-4"/></button>
             </td>
         ),
         photo: (
             <td key="photo" className={`${cellPadded} text-center`}>
                 <div className="relative inline-block">
-                    <button onClick={() => setImageEditorOpen(o => !o)} className="focus:outline-none">
-                        <img src={product.imageUrls[0]} alt="img" className="w-8 h-8 object-cover rounded-sm border border-gray-200" />
-                    </button>
+                    <button onClick={() => setImageEditorOpen(o => !o)} className="focus:outline-none"><img src={product.imageUrls[0]} alt="img" className="w-8 h-8 object-cover rounded-sm border border-gray-200" /></button>
                     {isImageEditorOpen && (
                         <div ref={imageEditorRef} className="absolute z-10 mt-1 w-64 bg-white border border-gray-300 rounded shadow-lg p-2 left-0">
                             {isCameraActive ? (
                                 <div className="flex flex-col items-center gap-2">
                                     <video ref={videoRef} autoPlay playsInline className="w-full h-32 object-cover bg-black"></video>
-                                    <div className="flex gap-1">
-                                        <button onClick={handleTakePicture} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Снять</button>
-                                        <button onClick={stopCamera} className="px-2 py-1 text-xs bg-red-500 text-white rounded">Отмена</button>
-                                    </div>
+                                    <div className="flex gap-1"><button onClick={handleSave} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Снять</button><button onClick={stopCamera} className="px-2 py-1 text-xs bg-red-500 text-white rounded">Отмена</button></div>
                                 </div>
                             ) : (
                                 <>
                                     <div className="flex space-x-1 overflow-x-auto pb-1 mb-1">
                                         {product.imageUrls.map((url, index) => (
-                                           <div key={index} className="relative flex-shrink-0 group">
-                                             <img src={url} alt={`img ${index}`} className="h-16 w-16 object-cover border"/>
-                                             <button onClick={() => handleDeleteImage(index)} className="absolute top-0 right-0 bg-black bg-opacity-50 text-white p-0.5 opacity-0 group-hover:opacity-100">
-                                                 <TrashIcon className="w-3 h-3" />
-                                             </button>
-                                           </div>
+                                           <div key={index} className="relative flex-shrink-0 group"><img src={url} alt={`img ${index}`} className="h-16 w-16 object-cover border"/><button onClick={() => onUpdateImages(product.id, product.imageUrls.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-black bg-opacity-50 text-white p-0.5 opacity-0 group-hover:opacity-100"><TrashIcon className="w-3 h-3" /></button></div>
                                         ))}
                                     </div>
-                                    <div className="flex gap-1 justify-center">
-                                       <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" multiple className="hidden" />
-                                       <button onClick={handleAddFromFileClick} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">
-                                            + Фото
-                                       </button>
-                                       <button onClick={handleOpenCamera} className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">
-                                            Камера
-                                       </button>
-                                    </div>
+                                    <div className="flex gap-1 justify-center"><input type="file" ref={fileInputRef} onChange={async (e) => { if(e.target.files) onUpdateImages(product.id, [...product.imageUrls, URL.createObjectURL(e.target.files[0])])}} accept="image/*" multiple className="hidden" /><button onClick={() => fileInputRef.current?.click()} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">+ Фото</button></div>
                                 </>
                             )}
-                            <canvas ref={canvasRef} className="hidden"></canvas>
                         </div>
                     )}
                 </div>
@@ -607,26 +390,12 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         categories: (
             <td key="categories" className={cellPadded}>
                 <div className="relative h-full flex items-center">
-                    <button onClick={() => setCategoryPopoverOpen(o => !o)} className="text-xs text-left w-full truncate px-1 hover:text-indigo-600">
-                        {editedProduct.categories.length > 0 ? editedProduct.categories.join(', ') : <span className="text-gray-400">Нет</span>}
-                    </button>
+                    <button onClick={() => setCategoryPopoverOpen(o => !o)} className="text-xs text-left w-full truncate px-1 hover:text-indigo-600">{editedProduct.categories.length > 0 ? editedProduct.categories.join(', ') : <span className="text-gray-400">Нет</span>}</button>
                      {isCategoryPopoverOpen && (
                         <div ref={categoryEditorRef} className="absolute z-10 mt-1 w-56 bg-white border border-gray-300 rounded shadow-lg p-2 top-full left-0">
-                            <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2">
-                                {allPossibleCategories.map(cat => (
-                                    <div key={cat} className="flex items-center">
-                                        <input id={`table-cat-${product.id}-${cat}`} type="checkbox" checked={editedProduct.categories.includes(cat)} onChange={() => { handleCategoryToggle(cat); setIsDirty(true); }} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/>
-                                        <label htmlFor={`table-cat-${product.id}-${cat}`} className="ml-1.5 block text-xs text-gray-900">{cat}</label>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => {if(e.key === 'Enter'){e.preventDefault(); handleAddNewCategory(); setIsDirty(true);}}} placeholder="Категория" className="block w-full px-1 py-0.5 border border-gray-300 rounded text-xs"/>
-                                <button type="button" onClick={() => { handleAddNewCategory(); setIsDirty(true); }} className="px-1 py-0.5 bg-gray-200 text-xs rounded hover:bg-gray-300">+</button>
-                            </div>
-                            <div className="mt-2 pt-2 border-t flex justify-end">
-                                <button onClick={handleSave} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">ОК</button>
-                            </div>
+                            <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2">{allPossibleCategories.map(cat => (<div key={cat} className="flex items-center"><input id={`table-cat-${product.id}-${cat}`} type="checkbox" checked={editedProduct.categories.includes(cat)} onChange={() => { handleCategoryToggle(cat); setIsDirty(true); }} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`table-cat-${product.id}-${cat}`} className="ml-1.5 block text-xs text-gray-900">{cat}</label></div>))}</div>
+                            <div className="flex items-center gap-1"><input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => {if(e.key === 'Enter'){e.preventDefault(); handleAddNewCategory();}}} placeholder="Категория" className="block w-full px-1 py-0.5 border border-gray-300 rounded text-xs"/><button type="button" onClick={handleAddNewCategory} className="px-1 py-0.5 bg-gray-200 text-xs rounded hover:bg-gray-300">+</button></div>
+                            <div className="mt-2 pt-2 border-t flex justify-end"><button onClick={() => { handleSave(); setCategoryPopoverOpen(false); }} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">ОК</button></div>
                         </div>
                     )}
                 </div>
@@ -635,32 +404,11 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         visibility: (
             <td key="visibility" className={cellPadded}>
                 <div className="relative h-full flex items-center">
-                    <button onClick={() => setRolePopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline px-1 truncate w-full text-left">
-                        {!editedProduct.visibleToRoles || editedProduct.visibleToRoles.length === 0 
-                            ? 'Все' 
-                            : `${editedProduct.visibleToRoles.length} ролей`
-                        }
-                    </button>
+                    <button onClick={() => setRolePopoverOpen(o => !o)} className="text-xs text-indigo-600 hover:underline px-1 truncate w-full text-left">{!editedProduct.visibleToRoles || editedProduct.visibleToRoles.length === 0 ? 'Все' : `${editedProduct.visibleToRoles.length} ролей`}</button>
                     {isRolePopoverOpen && (
                         <div ref={roleEditorRef} className="absolute z-10 mt-1 w-40 bg-white border border-gray-300 rounded shadow-lg p-2 left-0">
-                            <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                                <div className="text-[10px] text-gray-500 mb-1 italic">Пусто = всем</div>
-                                {roles.map(role => (
-                                    <div key={role} className="flex items-center">
-                                        <input 
-                                            id={`role-${product.id}-${role}`} 
-                                            type="checkbox" 
-                                            checked={(editedProduct.visibleToRoles || []).includes(role)} 
-                                            onChange={() => { handleRoleToggle(role); setIsDirty(true); }} 
-                                            className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
-                                        />
-                                        <label htmlFor={`role-${product.id}-${role}`} className="ml-1.5 block text-xs text-gray-900 truncate">{role}</label>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-2 pt-2 border-t flex justify-end">
-                                <button onClick={handleSave} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">ОК</button>
-                            </div>
+                            <div className="space-y-0.5 max-h-40 overflow-y-auto"><div className="text-[10px] text-gray-500 mb-1 italic">Пусто = всем</div>{roles.map(role => (<div key={role} className="flex items-center"><input id={`role-${product.id}-${role}`} type="checkbox" checked={(editedProduct.visibleToRoles || []).includes(role)} onChange={() => { handleRoleToggle(role); setIsDirty(true); }} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`role-${product.id}-${role}`} className="ml-1.5 block text-xs text-gray-900 truncate">{role}</label></div>))}</div>
+                            <div className="mt-2 pt-2 border-t flex justify-end"><button onClick={() => { handleSave(); setRolePopoverOpen(false); }} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">ОК</button></div>
                         </div>
                     )}
                 </div>
@@ -668,72 +416,15 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         ),
         price: (
             <td key="price" className={cellFlush}>
-                {roleKey ? (
-                    <input 
-                        type="number" 
-                        value={tierPrice} 
-                        onChange={handleTierPriceChange}
-                        onBlur={handleSave}
-                        onKeyDown={handleKeyDown}
-                        className={`${flushInputClasses} bg-yellow-50`}
-                        placeholder="-"
-                    />
-                ) : (
-                    <input 
-                        type="number" 
-                        name="pricePerUnit" 
-                        value={editedProduct.pricePerUnit} 
-                        onChange={handleNumberChange} 
-                        onBlur={handleSave}
-                        onKeyDown={handleKeyDown}
-                        className={flushInputClasses} 
-                    />
-                )}
+                <input type="number" value={roleKey ? tierPrice : editedProduct.pricePerUnit} onChange={roleKey ? handleTierPriceChange : handleNumberChange} name={roleKey ? undefined : "pricePerUnit"} onBlur={handleSave} onKeyDown={handleKeyDown} className={`${flushInputClasses} ${roleKey ? 'bg-yellow-50' : ''}`} placeholder="-"/>
             </td>
         ),
-        unit: (
-            <td key="unit" className={cellFlush}>
-                 <select 
-                    name="unit" 
-                    value={editedProduct.unit} 
-                    onChange={handleGenericChange} 
-                    onBlur={handleSave}
-                    className={flushSelectClasses}
-                >
-                    {unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}
-                </select>
-            </td>
-        ),
-        value: (
-            <td key="value" className={cellFlush}>
-                <input 
-                    type="number" 
-                    step="0.01" 
-                    name="unitValue" 
-                    value={editedProduct.unitValue} 
-                    onChange={handleNumberChange} 
-                    onBlur={handleSave}
-                    onKeyDown={handleKeyDown}
-                    className={flushInputClasses} 
-                />
-            </td>
-        ),
-        packaging: (
-            <td key="packaging" className={cellFlush}>
-                <select 
-                    name="packaging" 
-                    value={editedProduct.packaging} 
-                    onChange={handleGenericChange} 
-                    onBlur={handleSave}
-                    className={flushSelectClasses}
-                >
-                    {packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}
-                </select>
-            </td>
-        ),
+        unit: <td key="unit" className={cellFlush}><select name="unit" value={editedProduct.unit} onChange={handleGenericChange} onBlur={handleSave} className={flushSelectClasses}>{unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}</select></td>,
+        value: <td key="value" className={cellFlush}><input type="number" step="0.01" name="unitValue" value={editedProduct.unitValue} onChange={handleNumberChange} onBlur={handleSave} onKeyDown={handleKeyDown} className={flushInputClasses} /></td>,
+        packaging: <td key="packaging" className={cellFlush}><select name="packaging" value={editedProduct.packaging} onChange={handleGenericChange} onBlur={handleSave} className={flushSelectClasses}>{packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}</select></td>,
         portions: (
             <td key="portions" className={`${cellPadded} text-xs`}>
-                 {editedProduct.unit === 'kg' ? (
+                 {editedProduct.packaging === 'головка' ? (
                      <div className="flex flex-col gap-0.5 justify-center h-full">
                         <div className="flex items-center"><input id={`half-${product.id}`} type="checkbox" checked={currentPortions.includes('half')} onChange={() => handlePortionToggle('half')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`half-${product.id}`} className="ml-1">1/2</label></div>
                         <div className="flex items-center"><input id={`quarter-${product.id}`} type="checkbox" checked={currentPortions.includes('quarter')} onChange={() => handlePortionToggle('quarter')} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`quarter-${product.id}`} className="ml-1">1/4</label></div>
@@ -743,10 +434,10 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         ),
         special: (
             <td key="special" className={cellPadded}>
-                {editedProduct.unit === 'kg' ? (
+                {editedProduct.packaging === 'головка' ? (
                     <div className="flex flex-col gap-1 justify-center h-full">
-                        <input type="number" value={currentOverrides?.half ?? ''} onChange={e => handlePriceOverrideChange('half', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/2" className={nestedInputClasses} title="Цена за кг (1/2)"/>
-                        <input type="number" value={currentOverrides?.quarter ?? ''} onChange={e => handlePriceOverrideChange('quarter', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/4" className={nestedInputClasses} title="Цена за кг (1/4)"/>
+                        <input type="number" value={currentOverrides?.half ?? ''} onChange={e => handlePriceOverrideChange('half', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/2" className={nestedInputClasses} title="Цена за ед. (1/2)"/>
+                        <input type="number" value={currentOverrides?.quarter ?? ''} onChange={e => handlePriceOverrideChange('quarter', e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} placeholder="1/4" className={nestedInputClasses} title="Цена за ед. (1/4)"/>
                     </div>
                 ) : <span className="text-gray-300 text-center block">-</span>}
             </td>
@@ -760,40 +451,29 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                     onChange={handleUspPriceChange} 
                     onBlur={handleSave} 
                     onKeyDown={handleKeyDown} 
-                    className={`${flushInputClasses} ${roleKey ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`} 
+                    className={`${flushInputClasses} bg-white border-indigo-100 font-medium`} 
                     placeholder="-" 
-                    disabled={!!roleKey} 
-                    readOnly={!!roleKey}
                 />
+            </td>
+        ),
+        markup: (
+            <td key="markup" className={cellPadded}>
+                <div className="flex items-center h-full w-full bg-white border border-gray-300 rounded-sm overflow-hidden">
+                    <select value={markupType} onChange={(e) => handleMarkupTypeChange(e.target.value as 'percent' | 'fixed')} className="h-6 text-[10px] bg-gray-50 border-r border-gray-300 focus:outline-none px-0.5 cursor-pointer text-gray-700" title="Тип наценки"><option value="percent">%</option><option value="fixed">₽</option></select>
+                    <input type="number" value={markupValue} onChange={(e) => handleMarkupChange(e.target.value)} onBlur={handleSave} onKeyDown={handleKeyDown} className="block w-full h-6 px-1 text-xs focus:outline-none text-gray-800" placeholder="0"/>
+                </div>
             </td>
         ),
         actions: (
             <td key="actions" className={`${cellPadded} text-center`}>
                 <div className="flex items-center justify-center gap-1 h-full">
-                    {showSaved && (
-                        <span className="flex items-center text-green-500 animate-pulse mr-1" title="Сохранено">
-                            <CheckIcon className="w-4 h-4" />
-                        </span>
-                    )}
+                    {showSaved && <span className="flex items-center text-green-500 animate-pulse mr-1" title="Сохранено"><CheckIcon className="w-4 h-4" /></span>}
                     <div className="relative" ref={actionsMenuRef}>
-                        <button onClick={() => setActionsMenuOpen(o => !o)} className="p-0.5 text-gray-500 hover:bg-gray-200 rounded">
-                            <MoreIcon className="w-4 h-4" />
-                        </button>
+                        <button onClick={() => setActionsMenuOpen(o => !o)} className="p-0.5 text-gray-500 hover:bg-gray-200 rounded"><MoreIcon className="w-4 h-4" /></button>
                         {isActionsMenuOpen && (
                             <div className="absolute right-0 bottom-full mb-1 w-32 bg-white rounded shadow-lg border z-20 py-1 text-xs">
-                                <button
-                                    onClick={() => { handleReset(); setActionsMenuOpen(false); }}
-                                    disabled={!isDirty}
-                                    className="w-full text-left px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                                >
-                                    Сброс изменений
-                                </button>
-                                <button
-                                    onClick={() => { onDeleteProduct(product.id); setActionsMenuOpen(false); }}
-                                    className="w-full text-left px-2 py-1 text-red-600 hover:bg-red-50"
-                                >
-                                    Удалить
-                                </button>
+                                <button onClick={() => { handleReset(); setActionsMenuOpen(false); }} disabled={!isDirty} className="w-full text-left px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:opacity-50">Сброс изменений</button>
+                                <button onClick={() => { onDeleteProduct(product.id); setActionsMenuOpen(false); }} className="w-full text-left px-2 py-1 text-red-600 hover:bg-red-50">Удалить</button>
                             </div>
                         )}
                     </div>

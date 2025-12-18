@@ -1,4 +1,3 @@
-
 export enum ProductStatus {
   Available = 'available',
   OutOfStock = 'out_of_stock',
@@ -54,6 +53,7 @@ export interface Product {
   costPrice?: number;
   usp1Price?: number;
   usp1UseGlobalMarkup?: boolean;
+  tierMarkups?: Record<string, { value?: number; type: 'percent' | 'fixed' }>; // Independent markups per role
   priceTiers?: Record<string, number>; // Dynamic keys for roles (base price)
   tierPortions?: Record<string, ProductPortion[]>; // Dynamic keys for roles (allowed portions)
   tierPriceOverrides?: Record<string, { half?: number; quarter?: number }>; // Dynamic keys for roles (special prices)

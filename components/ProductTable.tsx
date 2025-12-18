@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Product, ProductPortion, ProductUnit, ProductPackaging, CustomerType } from '../types';
 import ProductTableRow from './ProductTableRow';
@@ -14,7 +13,7 @@ interface ProductTableProps {
     onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // Added prop
     onUpdateTierPortions?: (productId: string, role: string, portions: ProductPortion[]) => void;
     onUpdateTierPriceOverrides?: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
-    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
+    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; markupValue?: number; markupType?: 'percent' | 'fixed'; role?: string; }) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
     onUpdateUnitValue: (productId: string, newUnitValue: number) => void;
     onUpdateDetails: (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => void;
@@ -31,6 +30,7 @@ interface ProductTableProps {
     onToggleRow?: (id: string) => void; // New
     onToggleAll?: () => void; // New
     isAllSelected?: boolean; // New
+    isMasterView?: boolean; // Added prop
 }
 
 const DEFAULT_WIDTHS: Record<string, number> = {
@@ -48,12 +48,13 @@ const DEFAULT_WIDTHS: Record<string, number> = {
     portions: 160,
     special: 160,
     cost: 100,
+    markup: 110, // New column width
     actions: 140
 };
 
 const DEFAULT_ORDER = [
     'select', 'status', 'photo', 'name', 'description', 'categories', 'visibility', 
-    'price', 'unit', 'value', 'packaging', 'portions', 'special', 'cost', 'actions'
+    'cost', 'markup', 'price', 'unit', 'value', 'packaging', 'portions', 'special', 'actions'
 ];
 
 const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
@@ -71,6 +72,7 @@ const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
     portions: "Порции",
     special: "Спец.",
     cost: "Себест.",
+    markup: "Наценка", // New label
     actions: <span>Действия</span>
 };
 
@@ -95,6 +97,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
     onToggleRow,
     onToggleAll,
     isAllSelected,
+    isMasterView = false,
     ...propsForRow 
 }) => {
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
@@ -453,6 +456,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                             onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
                             isSelected={selectedIds?.has(product.id)}
                             onToggleSelect={onToggleRow}
+                            isMasterView={isMasterView}
                             {...propsForRow}
                         />
                     ))}

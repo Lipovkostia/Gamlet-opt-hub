@@ -117,21 +117,21 @@ const PriceEditorComponent: React.FC<{
         <input type="number" name="pricePerUnit" id={`pricePerUnit-${product.id}`} value={prices.pricePerUnit} onChange={onPriceChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
       </div>
       
-      {product.unit === 'kg' && (
+      {product.packaging === 'головка' && (
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Специальные цены за килограмм для порций</p>
+          <p className="text-sm font-medium text-gray-700 mb-2">Специальные цены за ед. для порций</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                   <label htmlFor={`price-half-unit-${product.id}`} className="flex items-center gap-2 text-sm font-medium text-gray-700">
                       <HalfCircleIcon className="w-4 h-4 text-gray-500"/>
-                      <span>Цена за кг (Половинка)</span>
+                      <span>Цена за ед. (Половинка)</span>
                   </label>
                   <input type="number" name="half_unit_override" id={`price-half-unit-${product.id}`} value={prices.half_unit_override} onChange={onPriceChange} placeholder={product.pricePerUnit.toString()} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
               </div>
               <div>
                   <label htmlFor={`price-quarter-unit-${product.id}`} className="flex items-center gap-2 text-sm font-medium text-gray-700">
                       <QuarterCircleIcon className="w-4 h-4 text-gray-500"/>
-                      <span>Цена за кг (Четвертинка)</span>
+                      <span>Цена за ед. (Четвертинка)</span>
                   </label>
                   <input type="number" name="quarter_unit_override" id={`price-quarter-unit-${product.id}`} value={prices.quarter_unit_override} onChange={onPriceChange} placeholder={product.pricePerUnit.toString()} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
               </div>
@@ -708,7 +708,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                     <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
                         {isAdminView ? (
                           <>
-                           {product.unit === 'kg' && (
+                           {product.packaging === 'головка' && (
                             <>
                                 <button
                                     onClick={() => onUpdatePortions && onUpdatePortions(product.id, 'quarter')}
@@ -736,7 +736,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                           </>
                         ) : product.status === ProductStatus.Available ? (
                           <>
-                            {product.unit === 'kg' && product.allowedPortions.includes('quarter') && (
+                            {product.packaging === 'головка' && product.allowedPortions.includes('quarter') && (
                               <button
                                   onClick={() => handleAddToCartClick('quarter')}
                                   className={customerButtonClasses}
@@ -751,7 +751,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                                   )}
                               </button>
                             )}
-                            {product.unit === 'kg' && product.allowedPortions.includes('half') && (
+                            {product.packaging === 'головка' && product.allowedPortions.includes('half') && (
                               <button
                                   onClick={() => handleAddToCartClick('half')}
                                   className={customerButtonClasses}

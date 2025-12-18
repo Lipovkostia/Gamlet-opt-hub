@@ -36,7 +36,7 @@ interface AdminPageProps {
     onUpdateTierPortions: (productId: string, role: string, portions: ProductPortion[]) => void;
     onUpdateTierPriceOverrides: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
     onUpdateProductCostPrice: (productId: string, costPrice?: number) => void;
-    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => void;
+    onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; markupValue?: number; markupType?: 'percent' | 'fixed'; role?: string; }) => void;
     onBulkUpdateUspPrices: (updates: { productId: string; usp1Price?: number; }[]) => void;
     onBulkUpdateWholesalePrices: (updates: { productId: string; newPrice: number; }[]) => void;
     onUpdateUspMarkupFlags: (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => void;
@@ -70,7 +70,7 @@ const BADGE_COLORS = [
 ];
 
 const TABLE_COLUMNS_OPTIONS = [
-    { key: 'select', label: 'Выбор' }, // Added select column option
+    { key: 'select', label: 'Выбор' },
     { key: 'status', label: 'Статус' },
     { key: 'photo', label: 'Фото' },
     { key: 'name', label: 'Название' },
@@ -84,6 +84,7 @@ const TABLE_COLUMNS_OPTIONS = [
     { key: 'portions', label: 'Порции' },
     { key: 'special', label: 'Спец. цены' },
     { key: 'cost', label: 'Себестоимость' },
+    { key: 'markup', label: 'Наценка' },
     { key: 'actions', label: 'Действия' },
 ];
 
@@ -125,6 +126,7 @@ const CloudDownloadIcon: React.FC<{className?: string}> = ({ className }) => (
 );
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
+    // FIX: Removed duplicate onUpdateUspMarkupFlags from the destructuring of props.
     const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides } = props;
     
     // Form state
@@ -226,7 +228,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     
     // Table Column Visibility
     const [visibleTableColumns, setVisibleTableColumns] = useState<string[]>(TABLE_COLUMNS_OPTIONS.map(c => c.key));
-    const [visibleMasterColumns, setVisibleMasterColumns] = useState<string[]>(TABLE_COLUMNS_OPTIONS.map(c => c.key));
+    // Updated initial state for master columns to exclude price, markup, portions and special by default
+    const [visibleMasterColumns, setVisibleMasterColumns] = useState<string[]>(
+        TABLE_COLUMNS_OPTIONS.map(c => c.key).filter(k => !['price', 'markup', 'portions', 'special'].includes(k))
+    );
     
     // State for USP markups
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
@@ -416,7 +421,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
 
         const allowedPortions: ProductPortion[] = ['whole'];
-        if (unit === 'kg') {
+        if (packaging === 'головка') {
           if (allowHalf) allowedPortions.push('half');
           if (allowQuarter) allowedPortions.push('quarter');
         }
@@ -449,7 +454,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
     };
     
-    // ... (helper functions omitted for brevity but remain unchanged) ...
     const handleToggleTableColumn = (key: string) => {
         setVisibleTableColumns(prev => {
             if (prev.includes(key)) {
@@ -595,9 +599,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         imageFileInputRef.current?.click();
     };
     
-    // ... (omitted Excel and Sheets import handlers for brevity) ...
     const handleGoogleSheetImport = async () => {
-        // ... implementation as before ...
         if (!sheetUrl) {
             setImportError('Пожалуйста, вставьте URL.');
             return;
@@ -676,7 +678,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // ... (Excel upload logic remains unchanged) ...
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -760,7 +761,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         }
 
                         const allowedPortions: ProductPortion[] = ['whole'];
-                        if (unit === 'kg') {
+                        if (packaging === 'головка') {
                             const halfRaw = getValue(row, 'Продавать половинками (да/нет)', 'Half')?.toString().toLowerCase();
                             if (halfRaw === 'да' || halfRaw === 'yes' || halfRaw === 'true' || halfRaw === '1') {
                                 allowedPortions.push('half');
@@ -899,7 +900,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         )
     };
 
-    // ... (category and other logic omitted for brevity, keeping only essential for AdminPageProps) ...
     const allPossibleCategories = useMemo(() => {
       const combined = new Set([...allCategories, ...selectedCategories]);
       return Array.from(combined).sort();
@@ -949,7 +949,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         setMsError('');
         if (!isSilent) {
             setMsLoading(true);
-            // setMsData([]); // Removed: Do not clear data immediately to prevent flickering
             if (!isSilent) setSelectedMsIds(new Set()); // Only reset selection if manual full reload
         }
 
@@ -973,7 +972,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 method: 'GET',
                 headers: {
                     'Authorization': `Basic ${auth}`,
-                    // Note: 'Content-Type' usually not needed for GET, but some proxies might like it
                 }
             });
 
@@ -1024,8 +1022,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         return () => clearInterval(interval);
     }, [msAutoRefresh, activeTab, msLogin, msPassword, handleLoadMoySklad]);
 
-    // Removed auto-load useEffect to prevent infinite loop on error/empty data.
-
     const handleMsToggleRow = (id: string) => {
         setSelectedMsIds(prev => {
             const next = new Set(prev);
@@ -1073,7 +1069,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             }
 
             const allowedPortions: ProductPortion[] = ['whole'];
-            if (unit === 'kg') {
+            if (packaging === 'головка') {
                 allowedPortions.push('half');
                 allowedPortions.push('quarter');
             }
@@ -1102,7 +1098,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     return (
         <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-sm px-0 py-2 sm:p-6 relative w-full">
-            {/* ... (Header and Tabs code remains same) ... */}
             <div className="mb-2 sm:mb-4 px-1 sm:px-0">
                 <button 
                     onClick={() => setIsIdInfoVisible(!isIdInfoVisible)}
@@ -1161,7 +1156,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             </div>
 
-            {/* ... Other Tabs Content ... */}
             {activeTab === 'pricelist' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
@@ -1257,7 +1251,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             )}
 
-            {/* ... other tab contents are same as before ... */}
             {activeTab === 'moysklad' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Интеграция с МойСклад</h3>
@@ -1467,7 +1460,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             {msFields.article && <th className="px-4 py-3">Артикул</th>}
                                             {msFields.code && <th className="px-4 py-3">Код</th>}
                                             {msFields.description && <th className="px-4 py-3">Описание</th>}
-                                            {msFields.uom && <th className="px-4 py-3">Ед. изм.</th>}
+                                            {msFields.uom && <th className="px-4 py-3">Ед. изм..</th>}
                                             {msFields.weight && <th className="px-4 py-3">Вес</th>}
                                             {msFields.volume && <th className="px-4 py-3">Объем</th>}
                                             {msFields.barcodes && <th className="px-4 py-3">Штрихкод</th>}
@@ -1504,7 +1497,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             )}
 
-            {/* ... (Rest of existing content) ... */}
             {activeTab === 'products_master' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
@@ -1566,7 +1558,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     <div className="md:col-span-3 pt-4 border-t mt-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Отображаемые столбцы</label>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                            {TABLE_COLUMNS_OPTIONS.map((col) => (
+                                            {/* Filtered to remove Price, Markup, Portions and Special from master view options */}
+                                            {TABLE_COLUMNS_OPTIONS.filter(c => !['price', 'markup', 'portions', 'special'].includes(c.key)).map((col) => (
                                                 <div key={col.key} className="flex items-center">
                                                     <input
                                                         id={`master-col-toggle-${col.key}`}
@@ -1632,6 +1625,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         onToggleRow={handleTableToggleRow}
                         onToggleAll={handleTableToggleAll}
                         isAllSelected={filteredTableProducts.length > 0 && filteredTableProducts.every(p => selectedProductIds.has(p.id))}
+                        isMasterView={true}
                     />
                 </div>
             )}
@@ -1778,6 +1772,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         roleKey={activePriceListRole === 'Базовый (Розничный)' ? undefined : activePriceListRole}
                         onUpdateTierPortions={onUpdateTierPortions}
                         onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
+                        isMasterView={false}
                     />
                 </div>
             )}
@@ -1862,6 +1857,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         products={products}
                         onUpdatePriceTiers={onUpdateProductPriceTiers}
                         onUpdateProductCostPrice={onUpdateProductCostPrice}
+                        onUpdateUspPrices={onUpdateUspPrices}
                         onBulkUpdateWholesalePrices={onBulkUpdateWholesalePrices}
                         roles={roles}
                     />
@@ -1969,7 +1965,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         onChange={e => setNewCategory(e.target.value)}
                                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNewCategory(); } }}
                                         placeholder="Новая категория"
-                                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                        className="block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
                                     />
                                     <button 
                                         type="button" 
@@ -2071,9 +2067,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                 </div>
                             </div>
                             
-                            {unit === 'kg' && (
+                            {packaging === 'головка' && (
                                 <div>
-                                    <span className="block text-sm font-medium text-gray-700">Опции продажи (для кг)</span>
+                                    <span className="block text-sm font-medium text-gray-700">Опции продажи (для головок)</span>
                                     <div className="mt-2 space-y-2">
                                         <div className="flex items-center">
                                             <input id="allowHalf" type="checkbox" checked={allowHalf} onChange={e => setAllowHalf(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/>

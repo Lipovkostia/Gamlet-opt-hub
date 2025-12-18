@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES, Badge } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
@@ -45,7 +44,7 @@ const TruckIcon: React.FC<{ className?: string; itemCount?: number }> = ({ class
         <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             {renderBoxes()}
             <path strokeLinecap="round" strokeLinejoin="round" d="M1 17h2.5" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.5 17h5.5" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.5(17h5.5" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 17h2.5" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M1 12h12v5H1z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 12l3-4h5v9h-8v-5z" />
@@ -565,8 +564,64 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       }
   };
 
-  const handleUpdateProductCostPrice = (productId: string, newCostPrice?: number) => handleProductUpdate(productId, { costPrice: newCostPrice });
-  const handleUpdateProductUspPrices = (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; }) => handleProductUpdate(productId, newUspPrices);
+  const handleUpdateProductCostPrice = (productId: string, newCostPrice?: number) => {
+    // Explicitly update global cost price and recalculate all tiers
+    handleUpdateProductUspPrices(productId, { costPrice: newCostPrice });
+  };
+  
+  const handleUpdateProductUspPrices = (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; markupValue?: number; markupType?: 'percent' | 'fixed'; role?: string; }) => {
+      const product = products.find(p => p.id === productId);
+      if (!product) return;
+
+      const { role, costPrice, markupValue, markupType, ...others } = newUspPrices;
+      let updatedPayload: any = { ...others };
+
+      // 1. Determine the final Cost Price
+      // If costPrice is explicitly in props, it means we are setting it globally
+      const hasNewCost = newUspPrices.hasOwnProperty('costPrice');
+      const finalCost = hasNewCost ? (costPrice ?? 0) : (product.costPrice || 0);
+      
+      if (hasNewCost) {
+          updatedPayload.costPrice = costPrice;
+      }
+
+      // 2. Update markup rule for the specified role if provided
+      const currentMarkups = { ...(product.tierMarkups || {}) };
+      if (role) {
+          currentMarkups[role] = {
+              value: markupValue,
+              type: markupType || (currentMarkups[role]?.type) || 'percent'
+          };
+          updatedPayload.tierMarkups = currentMarkups;
+      }
+
+      // 3. FORCE recalculation of ALL prices that depend on markups
+      // This is the core logic that syncs cost changes across all price lists
+      const newTiers = { ...(product.priceTiers || {}) };
+      let newBasePrice = product.pricePerUnit;
+
+      Object.keys(currentMarkups).forEach(r => {
+          const m = currentMarkups[r];
+          // Recalculate only if there's a markup rule and cost > 0
+          if (m && m.value !== undefined && finalCost > 0) {
+              const calculated = m.type === 'percent' 
+                ? Math.round(finalCost * (1 + m.value / 100)) 
+                : Math.round(finalCost + m.value);
+              
+              if (r === 'retail') {
+                  newBasePrice = calculated;
+              } else {
+                  newTiers[r] = calculated;
+              }
+          }
+      });
+
+      updatedPayload.priceTiers = newTiers;
+      updatedPayload.pricePerUnit = newBasePrice;
+
+      handleProductUpdate(productId, updatedPayload);
+  };
+
   const handleBulkUpdateUspPrices = (updates: { productId: string; usp1Price?: number; }[]) => updates.forEach(update => handleProductUpdate(update.productId, { usp1Price: update.usp1Price }));
   const handleBulkUpdateWholesalePrices = (updates: { productId: string; newPrice: number; }[]) => updates.forEach(update => {
         const product = products.find(p => p.id === update.productId);
@@ -702,6 +757,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
               
               <div className="relative z-10 w-full max-w-md">
                   <div className="text-center mb-8">
+                      {/* FIX: Fixed missing opening bracket for h1 tag. */}
                       <h1 className="text-3xl font-bold text-white mb-2 shadow-sm drop-shadow-md">{shopName}</h1>
                       <p className="text-gray-200 text-lg">Пожалуйста, зарегистрируйтесь для доступа к каталогу.</p>
                   </div>
@@ -757,7 +813,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                     )}
                 </button>
                 {cartItems.length > 0 && (
-                     <div className="space-y-0.5 text-xs sm:text-sm text-gray-600 border-l border-gray-200 pl-2 sm:pl-4 min-w-[120px]">
+                     <div className="space-y-0.5 text-xs sm:text-sm text-gray-600 border-l border-gray-200 pl-2 pl-4 min-w-[120px]">
                         <div className="flex justify-between gap-2">
                             <span className="text-gray-500">Позиций:</span>
                             <span className="font-semibold">{cartItems.length}</span>

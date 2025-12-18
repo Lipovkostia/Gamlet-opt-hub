@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Product } from '../types';
 import WholesaleProductTableRow from './WholesaleProductTableRow';
@@ -7,11 +6,12 @@ interface WholesaleProductTableProps {
     products: Product[];
     onUpdatePriceTiers: (productId: string, priceTiers: Product['priceTiers']) => void;
     onUpdateProductCostPrice: (productId: string, costPrice?: number) => void;
+    onUpdateUspPrices: (productId: string, newUspPrices: { markupValue?: number; markupType?: 'percent' | 'fixed'; }) => void;
     onBulkUpdateWholesalePrices: (updates: { productId: string; newPrice: number; }[]) => void;
     roles: string[];
 }
 
-const WholesaleProductTable: React.FC<WholesaleProductTableProps> = ({ products, onUpdatePriceTiers, onUpdateProductCostPrice, onBulkUpdateWholesalePrices, roles }) => {
+const WholesaleProductTable: React.FC<WholesaleProductTableProps> = ({ products, onUpdatePriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateWholesalePrices, roles }) => {
     // Filter out 'Retail' or 'Розничный' as it uses base price
     const wholesaleRoles = roles.filter(r => r !== 'Розничный');
 
@@ -22,6 +22,7 @@ const WholesaleProductTable: React.FC<WholesaleProductTableProps> = ({ products,
                     <tr>
                         <th scope="col" className="py-3 px-2 min-w-[200px]">Название</th>
                         <th scope="col" className="py-3 px-2 min-w-[150px]">себестоимость</th>
+                        <th scope="col" className="py-3 px-2 w-[140px]">Наценка</th>
                         {wholesaleRoles.map(role => (
                             <th key={role} scope="col" className="py-3 px-2 min-w-[150px]">
                                 Цена {role}
@@ -37,6 +38,7 @@ const WholesaleProductTable: React.FC<WholesaleProductTableProps> = ({ products,
                             product={product}
                             onUpdatePriceTiers={onUpdatePriceTiers}
                             onUpdateProductCostPrice={onUpdateProductCostPrice}
+                            onUpdateUspPrices={onUpdateUspPrices}
                             wholesaleRoles={wholesaleRoles}
                         />
                     ))}

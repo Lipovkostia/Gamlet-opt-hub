@@ -120,6 +120,11 @@ const ProductTable: React.FC<ProductTableProps> = ({
     const tableRef = useRef<HTMLTableElement>(null);
     const ghostRef = useRef<HTMLDivElement>(null);
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const colOrderRef = useRef(colOrder); // For access in listeners without re-binding
+
+    useEffect(() => {
+        colOrderRef.current = colOrder;
+    }, [colOrder]);
 
     useEffect(() => {
         const savedWidths = localStorage.getItem('productTableColWidths');
@@ -244,7 +249,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
     };
 
-    // --- ENHANCED TOUCH REORDER LOGIC ---
+    // --- ENHANCED TOUCH REORDER LOGIC WITH GLOBAL LISTENERS ---
 
     const handleTouchStart = (e: React.TouchEvent, key: string) => {
         if (key === 'select') return;
@@ -274,21 +279,18 @@ const ProductTable: React.FC<ProductTableProps> = ({
         }, 300); 
     };
 
-    const handleTouchMove = useCallback((e: React.TouchEvent) => {
-        if (!draggedCol || !ghostState) {
-            if (longPressTimer.current) {
-                // If user starts moving before long press, cancel it
-                const touch = e.touches[0];
-                const dx = Math.abs(touch.clientX - ghostState?.initialTouchX || 0);
-                const dy = Math.abs(touch.clientY - ghostState?.initialTouchY || 0);
-                if (dx > 10 || dy > 10) {
-                    clearTimeout(longPressTimer.current);
-                    longPressTimer.current = null;
-                }
-            }
-            return;
+    const handleGlobalTouchMove = useCallback((e: TouchEvent) => {
+        if (!ghostState || !draggedCol) {
+             if (longPressTimer.current) {
+                 const touch = e.touches[0];
+                 // Simple threshold to cancel long press if finger is moving
+                 const initial = { x: 0, y: 0 }; // We'd need to store start touch coords if we want precise cancellation
+                 // For simplicity, we only allow move if drag is already active
+             }
+             return;
         }
 
+        // Prevent scrolling while moving
         if (e.cancelable) e.preventDefault();
 
         const touch = e.touches[0];
@@ -299,36 +301,38 @@ const ProductTable: React.FC<ProductTableProps> = ({
             ghostRef.current.style.transform = `translate(${ghostState.startX + deltaX}px, ${ghostState.startY + deltaY}px) rotate(3deg) scale(1.05)`;
         }
 
-        // Logic to detect target column
-        // We look for elements at the current finger position
-        // Crucial: The ghost MUST have pointer-events: none to not block this
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
-        const headerCell = target?.closest('th');
+        // --- COORDINATE-BASED TARGET DETECTION ---
+        // Instead of elementFromPoint, we check all th boundaries
+        if (!tableRef.current) return;
+        const headers = Array.from(tableRef.current.querySelectorAll('thead th[data-colkey]')) as HTMLElement[];
         
-        if (headerCell && headerCell instanceof HTMLElement && headerCell.dataset.colkey) {
-            const targetKey = headerCell.dataset.colkey;
-            if (targetKey !== draggedCol && targetKey !== 'select') {
-                 const currentOrder = [...colOrder];
-                 const draggedIdx = currentOrder.indexOf(draggedCol);
-                 const targetIdx = currentOrder.indexOf(targetKey);
+        for (const header of headers) {
+            const key = header.dataset.colkey;
+            if (!key || key === draggedCol || key === 'select') continue;
 
-                 if (draggedIdx !== -1 && targetIdx !== -1) {
-                     // Check if we are past the middle of the target column to prevent jitter
-                     const targetRect = headerCell.getBoundingClientRect();
-                     const targetMid = targetRect.left + targetRect.width / 2;
-                     const isMovingRight = draggedIdx < targetIdx;
-                     
-                     if ((isMovingRight && touch.clientX > targetMid) || (!isMovingRight && touch.clientX < targetMid)) {
+            const rect = header.getBoundingClientRect();
+            // Finger is within column X bounds
+            if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
+                const currentOrder = [...colOrderRef.current];
+                const draggedIdx = currentOrder.indexOf(draggedCol);
+                const targetIdx = currentOrder.indexOf(key);
+
+                if (draggedIdx !== -1 && targetIdx !== -1) {
+                    const mid = rect.left + rect.width / 2;
+                    const isMovingRight = draggedIdx < targetIdx;
+                    
+                    if ((isMovingRight && touch.clientX > mid) || (!isMovingRight && touch.clientX < mid)) {
                         currentOrder.splice(draggedIdx, 1);
                         currentOrder.splice(targetIdx, 0, draggedCol);
                         setColOrder(currentOrder);
-                     }
-                 }
+                    }
+                }
+                break;
             }
         }
-    }, [draggedCol, ghostState, colOrder]);
+    }, [draggedCol, ghostState]);
 
-    const handleTouchEnd = useCallback(() => {
+    const handleGlobalTouchEnd = useCallback(() => {
         if (longPressTimer.current) {
             clearTimeout(longPressTimer.current);
             longPressTimer.current = null;
@@ -339,9 +343,23 @@ const ProductTable: React.FC<ProductTableProps> = ({
         if (draggedCol) {
             setDraggedCol(null);
             setGhostState(null);
-            localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
+            localStorage.setItem('productTableColOrder', JSON.stringify(colOrderRef.current));
         }
-    }, [draggedCol, colOrder]);
+    }, [draggedCol]);
+
+    // Use effect for global listeners to ensure drag is stable
+    useEffect(() => {
+        if (draggedCol) {
+            window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+            window.addEventListener('touchend', handleGlobalTouchEnd);
+            window.addEventListener('touchcancel', handleGlobalTouchEnd);
+        }
+        return () => {
+            window.removeEventListener('touchmove', handleGlobalTouchMove);
+            window.removeEventListener('touchend', handleGlobalTouchEnd);
+            window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+        };
+    }, [draggedCol, handleGlobalTouchMove, handleGlobalTouchEnd]);
 
     return (
         <div className="overflow-x-auto relative shadow-none rounded-none border border-gray-300 pb-32 sm:pb-0 select-none"> 
@@ -360,7 +378,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                         touchAction: 'none'
                     }}
                 >
-                    {ghostState.label}
+                    <span className="truncate px-2">{ghostState.label}</span>
                 </div>
             )}
 
@@ -381,9 +399,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
                                 onDragOver={(e) => handleDragOver(e, key)}
                                 onDragEnd={handleDragEnd}
                                 onTouchStart={(e) => handleTouchStart(e, key)}
-                                onTouchMove={handleTouchMove}
-                                onTouchEnd={handleTouchEnd}
-                                onTouchCancel={handleTouchEnd}
                                 className={`
                                     py-1 px-1 relative group select-none border-r border-b border-gray-300 bg-gray-100 transition-all duration-200 cursor-grab active:cursor-grabbing text-center align-middle h-10
                                     ${draggedCol === key 

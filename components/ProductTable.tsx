@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Product, ProductPortion, ProductUnit, ProductPackaging, CustomerType } from '../types';
 import ProductTableRow from './ProductTableRow';
 
-// Define props based on what AdminPanel will pass
 interface ProductTableProps {
     products: Product[];
     allCategories: string[];
@@ -78,8 +77,8 @@ const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
 };
 
 const ResizeIcon: React.FC<{className?: string}> = ({className}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" transform="rotate(90 10 10)" />
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 15l5 5 5-5M7 9l5-5 5 5" transform="rotate(90 12 12)" />
     </svg>
 );
 
@@ -103,63 +102,32 @@ const ProductTable: React.FC<ProductTableProps> = ({
 }) => {
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
     const [colOrder, setColOrder] = useState<string[]>(DEFAULT_ORDER);
-    const [draggedCol, setDraggedCol] = useState<string | null>(null);
     const [activeResizeMenu, setActiveResizeMenu] = useState<string | null>(null);
+    
+    // Drag and Drop States
+    const [draggedCol, setDraggedCol] = useState<string | null>(null);
+    const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
     const [ghostState, setGhostState] = useState<{
         key: string;
         label: React.ReactNode;
         width: number;
         height: number;
-        startX: number;
-        startY: number;
-        initialTouchX: number;
-        initialTouchY: number;
+        x: number;
+        y: number;
+        offsetX: number;
+        offsetY: number;
     } | null>(null);
 
-    const resizeMenuRef = useRef<HTMLDivElement>(null);
     const tableRef = useRef<HTMLTableElement>(null);
-    const ghostRef = useRef<HTMLDivElement>(null);
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const colOrderRef = useRef(colOrder); // For access in listeners without re-binding
-
-    useEffect(() => {
-        colOrderRef.current = colOrder;
-    }, [colOrder]);
+    const isActuallyDragging = useRef(false);
 
     useEffect(() => {
         const savedWidths = localStorage.getItem('productTableColWidths');
         const savedOrder = localStorage.getItem('productTableColOrder');
-        
-        if (savedWidths) {
-            try {
-                const parsed = JSON.parse(savedWidths);
-                setColWidths(prev => ({ ...prev, ...parsed }));
-            } catch (e) { console.error(e); }
-        }
-
-        if (savedOrder) {
-            try {
-                const parsed = JSON.parse(savedOrder);
-                const mergedOrder = Array.from(new Set([...parsed, ...DEFAULT_ORDER])).filter(key => DEFAULT_ORDER.includes(key));
-                setColOrder(mergedOrder);
-            } catch (e) { console.error(e); }
-        }
+        if (savedWidths) try { setColWidths(prev => ({ ...prev, ...JSON.parse(savedWidths) })); } catch (e) {}
+        if (savedOrder) try { setColOrder(JSON.parse(savedOrder)); } catch (e) {}
     }, []);
-
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (resizeMenuRef.current && !resizeMenuRef.current.contains(event.target as Node)) {
-                setActiveResizeMenu(null);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    const saveWidths = (newWidths: Record<string, number>) => {
-        setColWidths(newWidths);
-        localStorage.setItem('productTableColWidths', JSON.stringify(newWidths));
-    };
 
     const effectiveColumnOrder = useMemo(() => {
         if (!visibleColumns) return colOrder;
@@ -178,288 +146,258 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 />
             )
         };
-
         if (!roleKey) return baseLabels;
         return {
             ...baseLabels,
-            price: <span className="text-indigo-700 font-bold">Цена ({roleKey})</span>,
-            portions: <span className="text-gray-400">Порции</span>,
-            special: <span className="text-gray-400">Спец.</span>
+            price: <span className="text-indigo-700 font-bold">Цена ({roleKey})</span>
         };
     }, [roleKey, isAllSelected, onToggleAll]);
 
-    // Desktop Resize Logic
-    const handleResizeMouseDown = (e: React.MouseEvent, key: string) => {
-        e.preventDefault();
-        e.stopPropagation(); 
-        const startX = e.pageX;
-        const startWidth = colWidths[key] || DEFAULT_WIDTHS[key];
-
-        const handleMouseMove = (moveEvent: MouseEvent) => {
-            const delta = moveEvent.pageX - startX;
-            const newWidth = Math.max(30, startWidth + delta);
-            setColWidths(prev => ({ ...prev, [key]: newWidth }));
-        };
-
-        const handleMouseUp = () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-            setColWidths(currentWidths => {
-                localStorage.setItem('productTableColWidths', JSON.stringify(currentWidths));
-                return currentWidths;
-            });
-        };
-
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-    };
-
+    // --- RESIZE LOGIC ---
     const handleSliderChange = (key: string, value: string) => {
         const newWidth = parseInt(value, 10);
-        saveWidths({ ...colWidths, [key]: newWidth });
+        const next = { ...colWidths, [key]: newWidth };
+        setColWidths(next);
+        localStorage.setItem('productTableColWidths', JSON.stringify(next));
     };
 
-    const handleDragStart = (e: React.DragEvent, key: string) => {
-        if (key === 'select') {
-            e.preventDefault();
-            return;
-        }
-        setDraggedCol(key);
-        e.dataTransfer.effectAllowed = 'move';
-        setActiveResizeMenu(null); 
-    };
-
-    const handleDragOver = useCallback((e: React.DragEvent, targetKey: string) => {
-        e.preventDefault();
-        if (!draggedCol || draggedCol === targetKey || targetKey === 'select') return;
-
-        const currentOrder = [...colOrder];
-        const draggedIdx = currentOrder.indexOf(draggedCol);
-        const targetIdx = currentOrder.indexOf(targetKey);
-
-        if (draggedIdx !== -1 && targetIdx !== -1) {
-            currentOrder.splice(draggedIdx, 1);
-            currentOrder.splice(targetIdx, 0, draggedCol);
-            setColOrder(currentOrder);
-        }
-    }, [colOrder, draggedCol]);
-
-    const handleDragEnd = () => {
-        setDraggedCol(null);
-        localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
-    };
-
-    // --- ENHANCED TOUCH REORDER LOGIC WITH GLOBAL LISTENERS ---
-
+    // --- TOUCH DRAG LOGIC (GOOGLE SHEETS STYLE) ---
     const handleTouchStart = (e: React.TouchEvent, key: string) => {
         if (key === 'select') return;
-        if ((e.target as HTMLElement).closest('.resize-btn')) return;
         
+        // Prevent drag if clicking resize button
+        const target = e.target as HTMLElement;
+        if (target.closest('.resize-trigger')) return;
+
         const touch = e.touches[0];
-        const target = e.currentTarget as HTMLElement;
-        const rect = target.getBoundingClientRect();
+        const rect = target.closest('th')?.getBoundingClientRect();
+        if (!rect) return;
 
         longPressTimer.current = setTimeout(() => {
-            // Block scrolling
-            document.body.style.overflow = 'hidden';
-            
+            isActuallyDragging.current = true;
             setDraggedCol(key);
             setGhostState({
                 key,
                 label: dynamicColumnLabels[key],
                 width: rect.width,
                 height: rect.height,
-                startX: rect.left,
-                startY: rect.top,
-                initialTouchX: touch.clientX,
-                initialTouchY: touch.clientY
+                x: rect.left,
+                y: rect.top,
+                offsetX: touch.clientX - rect.left,
+                offsetY: touch.clientY - rect.top
             });
-            
-            if (navigator.vibrate) navigator.vibrate(50);
-        }, 300); 
+            if (navigator.vibrate) navigator.vibrate(40);
+            document.body.style.overflow = 'hidden'; // Block scroll
+        }, 250);
     };
 
-    const handleGlobalTouchMove = useCallback((e: TouchEvent) => {
-        if (!ghostState || !draggedCol) {
-             if (longPressTimer.current) {
-                 const touch = e.touches[0];
-                 // Simple threshold to cancel long press if finger is moving
-                 const initial = { x: 0, y: 0 }; // We'd need to store start touch coords if we want precise cancellation
-                 // For simplicity, we only allow move if drag is already active
-             }
-             return;
+    const handleTouchMove = useCallback((e: TouchEvent) => {
+        if (!isActuallyDragging.current || !ghostState) {
+            if (longPressTimer.current) {
+                // If moved too much before long press, cancel it
+                clearTimeout(longPressTimer.current);
+                longPressTimer.current = null;
+            }
+            return;
         }
 
-        // Prevent scrolling while moving
-        if (e.cancelable) e.preventDefault();
-
+        e.preventDefault();
         const touch = e.touches[0];
         
-        if (ghostRef.current) {
-            const deltaX = touch.clientX - ghostState.initialTouchX;
-            const deltaY = touch.clientY - ghostState.initialTouchY;
-            ghostRef.current.style.transform = `translate(${ghostState.startX + deltaX}px, ${ghostState.startY + deltaY}px) rotate(3deg) scale(1.05)`;
-        }
+        // Update Ghost Position
+        setGhostState(prev => prev ? { ...prev, x: touch.clientX - prev.offsetX, y: touch.clientY - prev.offsetY } : null);
 
-        // --- COORDINATE-BASED TARGET DETECTION ---
-        // Instead of elementFromPoint, we check all th boundaries
+        // Find drop target index
         if (!tableRef.current) return;
         const headers = Array.from(tableRef.current.querySelectorAll('thead th[data-colkey]')) as HTMLElement[];
-        
-        for (const header of headers) {
-            const key = header.dataset.colkey;
-            if (!key || key === draggedCol || key === 'select') continue;
+        let foundIdx = -1;
 
-            const rect = header.getBoundingClientRect();
-            // Finger is within column X bounds
-            if (touch.clientX >= rect.left && touch.clientX <= rect.right) {
-                const currentOrder = [...colOrderRef.current];
-                const draggedIdx = currentOrder.indexOf(draggedCol);
-                const targetIdx = currentOrder.indexOf(key);
-
-                if (draggedIdx !== -1 && targetIdx !== -1) {
-                    const mid = rect.left + rect.width / 2;
-                    const isMovingRight = draggedIdx < targetIdx;
-                    
-                    if ((isMovingRight && touch.clientX > mid) || (!isMovingRight && touch.clientX < mid)) {
-                        currentOrder.splice(draggedIdx, 1);
-                        currentOrder.splice(targetIdx, 0, draggedCol);
-                        setColOrder(currentOrder);
-                    }
-                }
+        for (let i = 0; i < headers.length; i++) {
+            const hRect = headers[i].getBoundingClientRect();
+            const mid = hRect.left + hRect.width / 2;
+            
+            if (touch.clientX < mid) {
+                foundIdx = i;
                 break;
             }
+            if (i === headers.length - 1) foundIdx = headers.length;
         }
-    }, [draggedCol, ghostState]);
+        
+        setDropTargetIdx(foundIdx);
+    }, [ghostState]);
 
-    const handleGlobalTouchEnd = useCallback(() => {
+    const handleTouchEnd = useCallback(() => {
         if (longPressTimer.current) {
             clearTimeout(longPressTimer.current);
             longPressTimer.current = null;
         }
-        
-        document.body.style.overflow = '';
-        
-        if (draggedCol) {
-            setDraggedCol(null);
-            setGhostState(null);
-            localStorage.setItem('productTableColOrder', JSON.stringify(colOrderRef.current));
-        }
-    }, [draggedCol]);
 
-    // Use effect for global listeners to ensure drag is stable
-    useEffect(() => {
-        if (draggedCol) {
-            window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
-            window.addEventListener('touchend', handleGlobalTouchEnd);
-            window.addEventListener('touchcancel', handleGlobalTouchEnd);
+        if (isActuallyDragging.current && draggedCol !== null && dropTargetIdx !== null) {
+            const currentIdx = effectiveColumnOrder.indexOf(draggedCol);
+            let targetIdx = dropTargetIdx;
+
+            // Adjust index because removing element shifts others
+            if (currentIdx < targetIdx) targetIdx--;
+            
+            if (currentIdx !== targetIdx) {
+                const newOrder = [...colOrder];
+                const realDraggedIdx = newOrder.indexOf(draggedCol);
+                const targetKey = effectiveColumnOrder[dropTargetIdx === effectiveColumnOrder.length ? effectiveColumnOrder.length - 1 : dropTargetIdx];
+                const realTargetIdx = newOrder.indexOf(targetKey);
+
+                newOrder.splice(realDraggedIdx, 1);
+                newOrder.splice(realTargetIdx, 0, draggedCol);
+                
+                setColOrder(newOrder);
+                localStorage.setItem('productTableColOrder', JSON.stringify(newOrder));
+            }
         }
+
+        isActuallyDragging.current = false;
+        setDraggedCol(null);
+        setDropTargetIdx(null);
+        setGhostState(null);
+        document.body.style.overflow = '';
+    }, [draggedCol, dropTargetIdx, effectiveColumnOrder, colOrder]);
+
+    useEffect(() => {
+        window.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleTouchEnd);
         return () => {
-            window.removeEventListener('touchmove', handleGlobalTouchMove);
-            window.removeEventListener('touchend', handleGlobalTouchEnd);
-            window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+            window.removeEventListener('touchmove', handleTouchMove);
+            window.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [draggedCol, handleGlobalTouchMove, handleGlobalTouchEnd]);
+    }, [handleTouchMove, handleTouchEnd]);
+
+    // Desktop Drag Helpers
+    const handleDragStart = (e: React.DragEvent, key: string) => {
+        if (key === 'select') { e.preventDefault(); return; }
+        setDraggedCol(key);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e: React.DragEvent, targetKey: string) => {
+        e.preventDefault();
+        if (!draggedCol || draggedCol === targetKey || targetKey === 'select') return;
+        const newOrder = [...colOrder];
+        const di = newOrder.indexOf(draggedCol);
+        const ti = newOrder.indexOf(targetKey);
+        newOrder.splice(di, 1);
+        newOrder.splice(ti, 0, draggedCol);
+        setColOrder(newOrder);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedCol(null);
+        localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
+    };
 
     return (
-        <div className="overflow-x-auto relative shadow-none rounded-none border border-gray-300 pb-32 sm:pb-0 select-none"> 
+        <div className="overflow-x-auto relative shadow-none rounded-none border border-gray-300 pb-32 sm:pb-0 select-none bg-gray-50"> 
             
-            {/* Ghost Element for Dragging */}
+            {/* Drop Indicator Line */}
+            {isActuallyDragging.current && dropTargetIdx !== null && tableRef.current && (
+                <div 
+                    className="absolute top-0 bottom-0 w-1 bg-indigo-500 z-[60] pointer-events-none shadow-[0_0_8px_rgba(99,102,241,0.6)]"
+                    style={{
+                        left: (() => {
+                            const headers = Array.from(tableRef.current.querySelectorAll('thead th')) as HTMLElement[];
+                            if (dropTargetIdx >= headers.length) {
+                                return headers[headers.length - 1].getBoundingClientRect().right - tableRef.current.getBoundingClientRect().left;
+                            }
+                            return headers[dropTargetIdx].getBoundingClientRect().left - tableRef.current.getBoundingClientRect().left;
+                        })()
+                    }}
+                />
+            )}
+
+            {/* Ghost Header for Mobile Drag */}
             {ghostState && (
                 <div 
-                    ref={ghostRef}
-                    className="fixed z-[100] bg-indigo-600 text-white shadow-2xl rounded-lg flex items-center justify-center font-bold text-xs pointer-events-none border-2 border-indigo-400 opacity-90 transition-none"
+                    className="fixed z-[100] bg-white border-2 border-indigo-500 shadow-2xl rounded-lg flex items-center px-4 font-bold text-xs pointer-events-none opacity-90 scale-105 rotate-2"
                     style={{
                         width: ghostState.width,
                         height: ghostState.height,
-                        left: 0,
-                        top: 0,
-                        transform: `translate(${ghostState.startX}px, ${ghostState.startY}px) rotate(3deg) scale(1.05)`,
-                        touchAction: 'none'
+                        left: ghostState.x,
+                        top: ghostState.y,
                     }}
                 >
-                    <span className="truncate px-2">{ghostState.label}</span>
+                    <span className="truncate text-indigo-700">{ghostState.label}</span>
                 </div>
             )}
 
             <table 
-                className="w-full text-xs text-left text-gray-500 border-collapse border border-gray-300" 
+                className="w-full text-xs text-left text-gray-500 border-collapse" 
                 ref={tableRef} 
                 style={{ tableLayout: 'fixed' }}
             >
-                <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-20">
+                <thead className="text-[10px] sm:text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-40">
                     <tr>
-                        {effectiveColumnOrder.map(key => (
+                        {effectiveColumnOrder.map((key, idx) => (
                              <th 
                                 key={key}
                                 scope="col" 
                                 data-colkey={key}
-                                draggable={key !== 'select'}
+                                draggable={!isActuallyDragging.current && key !== 'select'}
                                 onDragStart={(e) => handleDragStart(e, key)}
                                 onDragOver={(e) => handleDragOver(e, key)}
                                 onDragEnd={handleDragEnd}
                                 onTouchStart={(e) => handleTouchStart(e, key)}
                                 className={`
-                                    py-1 px-1 relative group select-none border-r border-b border-gray-300 bg-gray-100 transition-all duration-200 cursor-grab active:cursor-grabbing text-center align-middle h-10
-                                    ${draggedCol === key 
-                                        ? 'bg-indigo-50 border-indigo-300 text-transparent opacity-50' 
-                                        : 'hover:bg-gray-200'
-                                    }
+                                    py-2 px-1 relative group select-none border-r border-b border-gray-300 bg-gray-100 transition-colors h-12 text-center align-middle
+                                    ${draggedCol === key ? 'opacity-30 bg-gray-200' : 'hover:bg-gray-200 active:bg-gray-300'}
+                                    ${idx === 0 ? 'border-l' : ''}
                                 `}
                                 style={{ width: `${colWidths[key]}px`, minWidth: `${colWidths[key]}px` }}
                             >
-                                <div className={`flex items-center justify-center w-full h-full ${draggedCol === key ? 'invisible' : ''}`}>
-                                    <span className="truncate px-1">{dynamicColumnLabels[key]}</span>
+                                <div className="flex items-center justify-center w-full h-full px-1">
+                                    <span className="truncate leading-tight">{dynamicColumnLabels[key]}</span>
                                 </div>
 
-                                {/* Mobile Resize Button */}
-                                <button 
-                                    className="resize-btn absolute right-0 top-0 bottom-0 w-5 flex items-center justify-center pointer-events-auto hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors sm:hidden z-10"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setActiveResizeMenu(activeResizeMenu === key ? null : key);
-                                    }}
-                                    title="Изменить ширину"
-                                >
-                                    <ResizeIcon className="w-3 h-3" />
-                                </button>
+                                {/* Mobile Resize Trigger Button */}
+                                {key !== 'select' && key !== 'actions' && (
+                                    <button 
+                                        className="resize-trigger absolute right-0 top-0 bottom-0 w-6 flex items-center justify-center pointer-events-auto text-gray-400 hover:text-indigo-600 focus:outline-none sm:hidden z-10"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            setActiveResizeMenu(activeResizeMenu === key ? null : key);
+                                        }}
+                                        onTouchStart={(e) => e.stopPropagation()} // CRITICAL FIX: prevent drag start
+                                    >
+                                        <ResizeIcon className="w-4 h-4 opacity-50" />
+                                    </button>
+                                )}
 
                                 {/* Slider Menu */}
                                 {activeResizeMenu === key && (
                                     <div 
-                                        ref={resizeMenuRef}
-                                        className="absolute top-full right-0 z-50 bg-white shadow-xl border border-gray-200 rounded-md p-3 min-w-[200px]"
+                                        className="absolute top-full right-0 z-50 bg-white shadow-2xl border border-gray-200 rounded-lg p-4 min-w-[220px] mt-1"
                                         onClick={(e) => e.stopPropagation()} 
+                                        onTouchStart={(e) => e.stopPropagation()}
                                     >
-                                        <div className="flex flex-col gap-2">
-                                            <label className="text-xs font-semibold text-gray-600 flex justify-between">
-                                                <span>Ширина</span>
-                                                <span>{colWidths[key]}px</span>
-                                            </label>
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Ширина</span>
+                                                <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded text-indigo-600">{colWidths[key]}px</span>
+                                            </div>
                                             <input 
                                                 type="range" 
-                                                min="30" 
+                                                min="40" 
                                                 max="600" 
                                                 step="5"
                                                 value={colWidths[key]} 
                                                 onChange={(e) => handleSliderChange(key, e.target.value)}
-                                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                             />
-                                            <div className="flex justify-between text-xs text-gray-400">
-                                                <button onClick={() => handleSliderChange(key, (colWidths[key] - 10).toString())} className="p-2 hover:bg-gray-100 rounded">-10</button>
-                                                <button onClick={() => handleSliderChange(key, DEFAULT_WIDTHS[key].toString())} className="p-2 hover:bg-gray-100 rounded text-indigo-500">Сброс</button>
-                                                <button onClick={() => handleSliderChange(key, (colWidths[key] + 10).toString())} className="p-2 hover:bg-gray-100 rounded">+10</button>
+                                            <div className="grid grid-cols-3 gap-1">
+                                                <button onClick={() => handleSliderChange(key, (colWidths[key] - 20).toString())} className="py-1 text-[10px] bg-gray-50 border rounded hover:bg-gray-100">-20</button>
+                                                <button onClick={() => handleSliderChange(key, DEFAULT_WIDTHS[key].toString())} className="py-1 text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100">Reset</button>
+                                                <button onClick={() => handleSliderChange(key, (colWidths[key] + 20).toString())} className="py-1 text-[10px] bg-gray-50 border rounded hover:bg-gray-100">+20</button>
                                             </div>
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Desktop Resize Handle */}
-                                <div
-                                    onMouseDown={(e) => handleResizeMouseDown(e, key)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 active:bg-indigo-600 z-20 transition-colors opacity-0 group-hover:opacity-100 hidden sm:block"
-                                />
                             </th>
                         ))}
                     </tr>

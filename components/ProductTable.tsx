@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Product, ProductPortion, ProductUnit, ProductPackaging, CustomerType } from '../types';
 import ProductTableRow from './ProductTableRow';
@@ -10,7 +11,7 @@ interface ProductTableProps {
     onCycleStatus: (productId: string) => void;
     onUpdatePortions: (productId: string, portion: ProductPortion) => void;
     onUpdatePrices: (productId: string, newPrices: { pricePerUnit: number, priceOverridesPerUnit: Product['priceOverridesPerUnit'] }) => void;
-    onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; // Added prop
+    onUpdatePriceTiers?: (productId: string, priceTiers: Product['priceTiers']) => void; 
     onUpdateTierPortions?: (productId: string, role: string, portions: ProductPortion[]) => void;
     onUpdateTierPriceOverrides?: (productId: string, role: string, overrides: { half?: number; quarter?: number }) => void;
     onUpdateUspPrices: (productId: string, newUspPrices: { costPrice?: number; usp1Price?: number; markupValue?: number; markupType?: 'percent' | 'fixed'; role?: string; }) => void;
@@ -25,12 +26,12 @@ interface ProductTableProps {
     onApplyMarkups: () => void;
     roles?: string[];
     visibleColumns?: string[];
-    roleKey?: string; // Added prop to filter/edit specific role prices
-    selectedIds?: Set<string>; // New
-    onToggleRow?: (id: string) => void; // New
-    onToggleAll?: () => void; // New
-    isAllSelected?: boolean; // New
-    isMasterView?: boolean; // Added prop
+    roleKey?: string; 
+    selectedIds?: Set<string>; 
+    onToggleRow?: (id: string) => void; 
+    onToggleAll?: () => void; 
+    isAllSelected?: boolean; 
+    isMasterView?: boolean; 
 }
 
 const DEFAULT_WIDTHS: Record<string, number> = {
@@ -48,7 +49,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
     portions: 160,
     special: 160,
     cost: 100,
-    markup: 110, // New column width
+    markup: 110, 
     actions: 140
 };
 
@@ -72,7 +73,7 @@ const COLUMN_LABELS: Record<string, string | React.ReactNode> = {
     portions: "Порции",
     special: "Спец.",
     cost: "Себест.",
-    markup: "Наценка", // New label
+    markup: "Наценка", 
     actions: <span>Действия</span>
 };
 
@@ -103,11 +104,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
     const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_WIDTHS);
     const [colOrder, setColOrder] = useState<string[]>(DEFAULT_ORDER);
     const [draggedCol, setDraggedCol] = useState<string | null>(null);
-    
-    // State for Mobile Resize Menu
     const [activeResizeMenu, setActiveResizeMenu] = useState<string | null>(null);
-    
-    // State for Mobile Drag Ghost
     const [ghostState, setGhostState] = useState<{
         key: string;
         label: React.ReactNode;
@@ -124,7 +121,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
     const ghostRef = useRef<HTMLDivElement>(null);
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Load saved settings from localStorage on mount
     useEffect(() => {
         const savedWidths = localStorage.getItem('productTableColWidths');
         const savedOrder = localStorage.getItem('productTableColOrder');
@@ -145,7 +141,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
         }
     }, []);
 
-    // Close resize menu when clicking outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (resizeMenuRef.current && !resizeMenuRef.current.contains(event.target as Node)) {
@@ -161,18 +156,12 @@ const ProductTable: React.FC<ProductTableProps> = ({
         localStorage.setItem('productTableColWidths', JSON.stringify(newWidths));
     };
 
-    // Calculate effective columns based on order and visibility filter
     const effectiveColumnOrder = useMemo(() => {
         if (!visibleColumns) return colOrder;
-        // Ensure 'select' is always visible if it's in colOrder but not in visibleColumns (unless explicitly hidden logic added later)
-        // For now, let's assume visibleColumns controls everything, but 'select' is usually not togglable by user preference in standard UI,
-        // but here we allow it.
         return colOrder.filter(key => visibleColumns.includes(key) || key === 'select');
     }, [colOrder, visibleColumns]);
 
-    // Customize labels if roleKey is present
     const dynamicColumnLabels = useMemo(() => {
-        // Special case for Select column header
         const baseLabels = {
             ...COLUMN_LABELS,
             select: (
@@ -194,7 +183,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
         };
     }, [roleKey, isAllSelected, onToggleAll]);
 
-    // --- Desktop Resize Logic ---
+    // Desktop Resize Logic
     const handleResizeMouseDown = (e: React.MouseEvent, key: string) => {
         e.preventDefault();
         e.stopPropagation(); 
@@ -220,16 +209,14 @@ const ProductTable: React.FC<ProductTableProps> = ({
         document.addEventListener('mouseup', handleMouseUp);
     };
 
-    // --- Slider Resize Logic (Mobile/Menu) ---
     const handleSliderChange = (key: string, value: string) => {
         const newWidth = parseInt(value, 10);
         saveWidths({ ...colWidths, [key]: newWidth });
     };
 
-    // --- Drag & Drop Logic (Desktop) ---
     const handleDragStart = (e: React.DragEvent, key: string) => {
         if (key === 'select') {
-            e.preventDefault(); // Don't drag the selection column
+            e.preventDefault();
             return;
         }
         setDraggedCol(key);
@@ -257,17 +244,20 @@ const ProductTable: React.FC<ProductTableProps> = ({
         localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
     };
 
-    // --- Enhanced Touch Logic (Mobile Reorder with Ghost) ---
+    // --- ENHANCED TOUCH REORDER LOGIC ---
+
     const handleTouchStart = (e: React.TouchEvent, key: string) => {
-        if (key === 'select') return; // Don't drag selection column
+        if (key === 'select') return;
         if ((e.target as HTMLElement).closest('.resize-btn')) return;
         
         const touch = e.touches[0];
         const target = e.currentTarget as HTMLElement;
         const rect = target.getBoundingClientRect();
 
-        // Start long press timer
         longPressTimer.current = setTimeout(() => {
+            // Block scrolling
+            document.body.style.overflow = 'hidden';
+            
             setDraggedCol(key);
             setGhostState({
                 key,
@@ -279,38 +269,43 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 initialTouchX: touch.clientX,
                 initialTouchY: touch.clientY
             });
-            // Haptic feedback if available
+            
             if (navigator.vibrate) navigator.vibrate(50);
-        }, 300); // 300ms long press to activate drag
+        }, 300); 
     };
 
-    const handleTouchMove = (e: React.TouchEvent) => {
-        // If we haven't entered drag mode yet, clear timer if user moves finger (scrolling)
-        if (!draggedCol) {
+    const handleTouchMove = useCallback((e: React.TouchEvent) => {
+        if (!draggedCol || !ghostState) {
             if (longPressTimer.current) {
-                clearTimeout(longPressTimer.current);
-                longPressTimer.current = null;
+                // If user starts moving before long press, cancel it
+                const touch = e.touches[0];
+                const dx = Math.abs(touch.clientX - ghostState?.initialTouchX || 0);
+                const dy = Math.abs(touch.clientY - ghostState?.initialTouchY || 0);
+                if (dx > 10 || dy > 10) {
+                    clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                }
             }
             return;
         }
 
-        // If dragging, prevent scrolling
         if (e.cancelable) e.preventDefault();
 
         const touch = e.touches[0];
         
-        // Update Ghost Position directly via DOM for performance
-        if (ghostRef.current && ghostState) {
+        if (ghostRef.current) {
             const deltaX = touch.clientX - ghostState.initialTouchX;
             const deltaY = touch.clientY - ghostState.initialTouchY;
             ghostRef.current.style.transform = `translate(${ghostState.startX + deltaX}px, ${ghostState.startY + deltaY}px) rotate(3deg) scale(1.05)`;
         }
 
-        // Find target under finger
+        // Logic to detect target column
+        // We look for elements at the current finger position
+        // Crucial: The ghost MUST have pointer-events: none to not block this
         const target = document.elementFromPoint(touch.clientX, touch.clientY);
         const headerCell = target?.closest('th');
         
-        if (headerCell && headerCell.dataset.colkey) {
+        if (headerCell && headerCell instanceof HTMLElement && headerCell.dataset.colkey) {
             const targetKey = headerCell.dataset.colkey;
             if (targetKey !== draggedCol && targetKey !== 'select') {
                  const currentOrder = [...colOrder];
@@ -318,26 +313,35 @@ const ProductTable: React.FC<ProductTableProps> = ({
                  const targetIdx = currentOrder.indexOf(targetKey);
 
                  if (draggedIdx !== -1 && targetIdx !== -1) {
-                     currentOrder.splice(draggedIdx, 1);
-                     currentOrder.splice(targetIdx, 0, draggedCol);
-                     setColOrder(currentOrder);
+                     // Check if we are past the middle of the target column to prevent jitter
+                     const targetRect = headerCell.getBoundingClientRect();
+                     const targetMid = targetRect.left + targetRect.width / 2;
+                     const isMovingRight = draggedIdx < targetIdx;
+                     
+                     if ((isMovingRight && touch.clientX > targetMid) || (!isMovingRight && touch.clientX < targetMid)) {
+                        currentOrder.splice(draggedIdx, 1);
+                        currentOrder.splice(targetIdx, 0, draggedCol);
+                        setColOrder(currentOrder);
+                     }
                  }
             }
         }
-    };
+    }, [draggedCol, ghostState, colOrder]);
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = useCallback(() => {
         if (longPressTimer.current) {
             clearTimeout(longPressTimer.current);
             longPressTimer.current = null;
         }
+        
+        document.body.style.overflow = '';
         
         if (draggedCol) {
             setDraggedCol(null);
             setGhostState(null);
             localStorage.setItem('productTableColOrder', JSON.stringify(colOrder));
         }
-    };
+    }, [draggedCol, colOrder]);
 
     return (
         <div className="overflow-x-auto relative shadow-none rounded-none border border-gray-300 pb-32 sm:pb-0 select-none"> 
@@ -346,13 +350,12 @@ const ProductTable: React.FC<ProductTableProps> = ({
             {ghostState && (
                 <div 
                     ref={ghostRef}
-                    className="fixed z-50 bg-indigo-600 text-white shadow-2xl rounded-lg flex items-center justify-center font-bold text-xs pointer-events-none border-2 border-indigo-400 opacity-90"
+                    className="fixed z-[100] bg-indigo-600 text-white shadow-2xl rounded-lg flex items-center justify-center font-bold text-xs pointer-events-none border-2 border-indigo-400 opacity-90 transition-none"
                     style={{
                         width: ghostState.width,
                         height: ghostState.height,
                         left: 0,
                         top: 0,
-                        // Initial transform set here, updated in touchMove
                         transform: `translate(${ghostState.startX}px, ${ghostState.startY}px) rotate(3deg) scale(1.05)`,
                         touchAction: 'none'
                     }}
@@ -361,7 +364,11 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 </div>
             )}
 
-            <table className="w-full text-xs text-left text-gray-500 border-collapse border border-gray-300" ref={tableRef} style={{ tableLayout: 'fixed' }}>
+            <table 
+                className="w-full text-xs text-left text-gray-500 border-collapse border border-gray-300" 
+                ref={tableRef} 
+                style={{ tableLayout: 'fixed' }}
+            >
                 <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-20">
                     <tr>
                         {effectiveColumnOrder.map(key => (
@@ -376,6 +383,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                                 onTouchStart={(e) => handleTouchStart(e, key)}
                                 onTouchMove={handleTouchMove}
                                 onTouchEnd={handleTouchEnd}
+                                onTouchCancel={handleTouchEnd}
                                 className={`
                                     py-1 px-1 relative group select-none border-r border-b border-gray-300 bg-gray-100 transition-all duration-200 cursor-grab active:cursor-grabbing text-center align-middle h-10
                                     ${draggedCol === key 
@@ -389,11 +397,11 @@ const ProductTable: React.FC<ProductTableProps> = ({
                                     <span className="truncate px-1">{dynamicColumnLabels[key]}</span>
                                 </div>
 
-                                {/* Mobile Resize Button moved to border */}
+                                {/* Mobile Resize Button */}
                                 <button 
-                                    className="resize-btn absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center pointer-events-auto hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors sm:hidden z-10"
+                                    className="resize-btn absolute right-0 top-0 bottom-0 w-5 flex items-center justify-center pointer-events-auto hover:bg-gray-300 text-gray-400 hover:text-indigo-600 focus:outline-none transition-colors sm:hidden z-10"
                                     onClick={(e) => {
-                                        e.stopPropagation(); // Prevent drag start
+                                        e.stopPropagation();
                                         setActiveResizeMenu(activeResizeMenu === key ? null : key);
                                     }}
                                     title="Изменить ширину"
@@ -406,8 +414,7 @@ const ProductTable: React.FC<ProductTableProps> = ({
                                     <div 
                                         ref={resizeMenuRef}
                                         className="absolute top-full right-0 z-50 bg-white shadow-xl border border-gray-200 rounded-md p-3 min-w-[200px]"
-                                        onClick={(e) => e.stopPropagation()} // Prevent bubble up
-                                        onTouchStart={(e) => e.stopPropagation()} // Prevent touch drag interaction
+                                        onClick={(e) => e.stopPropagation()} 
                                     >
                                         <div className="flex flex-col gap-2">
                                             <label className="text-xs font-semibold text-gray-600 flex justify-between">
@@ -437,7 +444,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
                                     onMouseDown={(e) => handleResizeMouseDown(e, key)}
                                     onClick={(e) => e.stopPropagation()}
                                     className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 active:bg-indigo-600 z-20 transition-colors opacity-0 group-hover:opacity-100 hidden sm:block"
-                                    title="Тяните мышкой"
                                 />
                             </th>
                         ))}

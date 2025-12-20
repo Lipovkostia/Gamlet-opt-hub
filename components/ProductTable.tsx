@@ -154,18 +154,18 @@ const ProductTable: React.FC<ProductTableProps> = ({
     }, [roleKey, isAllSelected, onToggleAll]);
 
     // --- RESIZE LOGIC ---
-    const handleSliderChange = (key: string, value: string) => {
-        const newWidth = parseInt(value, 10);
-        const next = { ...colWidths, [key]: newWidth };
+    const handleAdjustWidth = (key: string, delta: number) => {
+        const current = colWidths[key] || DEFAULT_WIDTHS[key];
+        const nextWidth = Math.max(40, Math.min(800, current + delta));
+        const next = { ...colWidths, [key]: nextWidth };
         setColWidths(next);
         localStorage.setItem('productTableColWidths', JSON.stringify(next));
     };
 
-    // --- TOUCH DRAG LOGIC (GOOGLE SHEETS STYLE) ---
+    // --- TOUCH DRAG LOGIC ---
     const handleTouchStart = (e: React.TouchEvent, key: string) => {
         if (key === 'select') return;
         
-        // Prevent drag if clicking resize button
         const target = e.target as HTMLElement;
         if (target.closest('.resize-trigger')) return;
 
@@ -187,14 +187,13 @@ const ProductTable: React.FC<ProductTableProps> = ({
                 offsetY: touch.clientY - rect.top
             });
             if (navigator.vibrate) navigator.vibrate(40);
-            document.body.style.overflow = 'hidden'; // Block scroll
+            document.body.style.overflow = 'hidden'; 
         }, 250);
     };
 
     const handleTouchMove = useCallback((e: TouchEvent) => {
         if (!isActuallyDragging.current || !ghostState) {
             if (longPressTimer.current) {
-                // If moved too much before long press, cancel it
                 clearTimeout(longPressTimer.current);
                 longPressTimer.current = null;
             }
@@ -204,10 +203,8 @@ const ProductTable: React.FC<ProductTableProps> = ({
         e.preventDefault();
         const touch = e.touches[0];
         
-        // Update Ghost Position
         setGhostState(prev => prev ? { ...prev, x: touch.clientX - prev.offsetX, y: touch.clientY - prev.offsetY } : null);
 
-        // Find drop target index
         if (!tableRef.current) return;
         const headers = Array.from(tableRef.current.querySelectorAll('thead th[data-colkey]')) as HTMLElement[];
         let foundIdx = -1;
@@ -236,7 +233,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
             const currentIdx = effectiveColumnOrder.indexOf(draggedCol);
             let targetIdx = dropTargetIdx;
 
-            // Adjust index because removing element shifts others
             if (currentIdx < targetIdx) targetIdx--;
             
             if (currentIdx !== targetIdx) {
@@ -269,7 +265,6 @@ const ProductTable: React.FC<ProductTableProps> = ({
         };
     }, [handleTouchMove, handleTouchEnd]);
 
-    // Desktop Drag Helpers
     const handleDragStart = (e: React.DragEvent, key: string) => {
         if (key === 'select') { e.preventDefault(); return; }
         setDraggedCol(key);
@@ -354,48 +349,58 @@ const ProductTable: React.FC<ProductTableProps> = ({
                                     <span className="truncate leading-tight">{dynamicColumnLabels[key]}</span>
                                 </div>
 
-                                {/* Mobile Resize Trigger Button */}
+                                {/* Minimalist Resize Trigger */}
                                 {key !== 'select' && key !== 'actions' && (
                                     <button 
-                                        className="resize-trigger absolute right-0 top-0 bottom-0 w-6 flex items-center justify-center pointer-events-auto text-gray-400 hover:text-indigo-600 focus:outline-none sm:hidden z-10"
+                                        className="resize-trigger absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-6 flex items-center justify-center pointer-events-auto text-gray-400 opacity-10 hover:opacity-100 focus:outline-none z-50 bg-white/50 rounded hover:bg-white hover:shadow-sm transition-opacity"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             e.preventDefault();
                                             setActiveResizeMenu(activeResizeMenu === key ? null : key);
                                         }}
-                                        onTouchStart={(e) => e.stopPropagation()} // CRITICAL FIX: prevent drag start
+                                        onTouchStart={(e) => e.stopPropagation()} 
                                     >
-                                        <ResizeIcon className="w-4 h-4 opacity-50" />
+                                        <ResizeIcon className="w-3 h-3" />
                                     </button>
                                 )}
 
-                                {/* Slider Menu */}
+                                {/* Floating +/- Controls */}
                                 {activeResizeMenu === key && (
                                     <div 
-                                        className="absolute top-full right-0 z-50 bg-white shadow-2xl border border-gray-200 rounded-lg p-4 min-w-[220px] mt-1"
+                                        className="absolute top-full right-0 z-50 bg-white shadow-2xl border border-gray-200 rounded-full px-2 py-1.5 flex items-center gap-3 mt-1 normal-case"
                                         onClick={(e) => e.stopPropagation()} 
                                         onTouchStart={(e) => e.stopPropagation()}
                                     >
-                                        <div className="flex flex-col gap-3">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase">Ширина</span>
-                                                <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded text-indigo-600">{colWidths[key]}px</span>
-                                            </div>
-                                            <input 
-                                                type="range" 
-                                                min="40" 
-                                                max="600" 
-                                                step="5"
-                                                value={colWidths[key]} 
-                                                onChange={(e) => handleSliderChange(key, e.target.value)}
-                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                            />
-                                            <div className="grid grid-cols-3 gap-1">
-                                                <button onClick={() => handleSliderChange(key, (colWidths[key] - 20).toString())} className="py-1 text-[10px] bg-gray-50 border rounded hover:bg-gray-100">-20</button>
-                                                <button onClick={() => handleSliderChange(key, DEFAULT_WIDTHS[key].toString())} className="py-1 text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 rounded hover:bg-indigo-100">Reset</button>
-                                                <button onClick={() => handleSliderChange(key, (colWidths[key] + 20).toString())} className="py-1 text-[10px] bg-gray-50 border rounded hover:bg-gray-100">+20</button>
-                                            </div>
+                                        <button 
+                                            onClick={() => handleAdjustWidth(key, -20)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition-all border border-red-100 font-bold text-lg"
+                                            title="Уменьшить"
+                                        >
+                                            −
+                                        </button>
+                                        
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[9px] font-bold text-gray-400 leading-none">Ширина</span>
+                                            <span className="text-xs font-mono text-indigo-600 font-bold leading-tight">{colWidths[key]}</span>
                                         </div>
+
+                                        <button 
+                                            onClick={() => handleAdjustWidth(key, 20)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-green-50 text-green-600 hover:bg-green-100 active:scale-95 transition-all border border-green-100 font-bold text-lg"
+                                            title="Увеличить"
+                                        >
+                                            +
+                                        </button>
+
+                                        <div className="w-px h-6 bg-gray-200 mx-1"></div>
+
+                                        <button 
+                                            onClick={() => setActiveResizeMenu(null)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-500 hover:bg-gray-100 active:scale-95 transition-all border border-gray-200"
+                                            title="Готово"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                        </button>
                                     </div>
                                 )}
                             </th>

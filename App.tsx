@@ -650,7 +650,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     });
   const handleUpdateProductUspMarkupFlags = (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => handleProductUpdate(productId, flags);
   const handleUpdateProductUnitValue = (productId: string, newUnitValue: number) => handleProductUpdate(productId, { unitValue: newUnitValue });
-  const handleUpdateProductDetails = (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => handleProductUpdate(productId, newDetails);
+  const handleUpdateProductDetails = (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging }) => handleProductUpdate(productId, newDetails);
   const handleUpdateProductImages = (productId: string, newImageUrls: string[]) => handleProductUpdate(productId, { imageUrls: newImageUrls });
   const handleUpdateProductCategories = (productId: string, newCategories: string[]) => {
     handleProductUpdate(productId, { categories: newCategories });
@@ -875,6 +875,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                      <button onClick={() => setAccountModalOpen(true)} className="text-gray-600 hover:text-indigo-600 focus:outline-none" aria-label="Личный кабинет">
                          <UserIcon className="w-8 h-8"/>
                      </button>
+                     <button onClick={logout} className="text-sm font-medium text-gray-600 hover:text-indigo-600">Выйти</button>
                  </div>
              ) : (
                 <div className="flex items-center gap-2">

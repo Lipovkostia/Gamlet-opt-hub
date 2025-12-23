@@ -20,18 +20,23 @@ const INITIAL_CATEGORIES = [
 
 // Helper to clean objects for Firestore (removes undefined fields)
 const cleanForFirestore = (obj: any): any => {
+    if (obj === undefined) return undefined;
+    if (obj === null || typeof obj !== 'object') return obj;
+
     if (Array.isArray(obj)) {
-        return obj.map(item => cleanForFirestore(item));
-    } else if (obj !== null && typeof obj === 'object') {
-        const clean: any = {};
-        Object.keys(obj).forEach(key => {
-            if (obj[key] !== undefined) {
-                clean[key] = cleanForFirestore(obj[key]);
-            }
-        });
-        return clean;
+        return obj
+            .map(item => cleanForFirestore(item))
+            .filter(item => item !== undefined);
     }
-    return obj;
+
+    const clean: any = {};
+    Object.keys(obj).forEach(key => {
+        const val = cleanForFirestore(obj[key]);
+        if (val !== undefined) {
+            clean[key] = val;
+        }
+    });
+    return clean;
 };
 
 // Icons
@@ -221,7 +226,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                   setCustomerRoles(shopSnap.data().roles);
               } else {
                   if (currentUser?.isAdmin) {
-                      await updateDoc(shopRef, { roles: ALL_CUSTOMER_TYPES });
+                      await updateDoc(shopRef, { roles: ALL_CUSTOMER_TYPES }).catch(e => console.error(e));
                   }
                   setCustomerRoles(ALL_CUSTOMER_TYPES);
               }
@@ -456,10 +461,12 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
 
     // Add to Firestore
     if (db && ordersCollection) {
-        addDoc(ordersCollection, cleanForFirestore(newOrder)).then(docRef => {
-            const orderWithId = { ...newOrder, id: docRef.id };
-            setOrders(prev => [orderWithId, ...prev]);
-        });
+        addDoc(ordersCollection, cleanForFirestore(newOrder))
+            .then(docRef => {
+                const orderWithId = { ...newOrder, id: docRef.id };
+                setOrders(prev => [orderWithId, ...prev]);
+            })
+            .catch(e => console.error("Order placing error", e));
     } else {
         const orderWithId = { ...newOrder, id: Date.now().toString() };
          setOrders(prev => [orderWithId, ...prev]);
@@ -477,7 +484,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 order.id === orderId ? { ...order, status: newStatus } : order
             );
             setOrders(updatedOrders);
-        } catch(e) { console.error(e); }
+        } catch(e) { console.error("Update order status error", e); }
     };
 
   const updateGlobalCategories = (newCats: string[]) => {
@@ -500,7 +507,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             await updateDoc(productRef, cleanUpdate);
             setProducts(prevProducts => prevProducts.map(p => (p.id === productId ? { ...p, ...cleanUpdate } : p)));
         }
-    } catch (err) { console.error("Firestore Update Error:", err); }
+    } catch (err) { console.error("Firestore Product Update Error:", err); }
   };
 
   const handleAddNewProduct = async (newProductData: Omit<Product, 'id' | 'status'>) => {
@@ -515,8 +522,8 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         setProducts(prevProducts => [...prevProducts, newProduct]);
         updateGlobalCategories(newProductData.categories);
     } catch (err) {
-        console.error(err);
-        throw err; // Propagate error so UI can react (stop loading, show error)
+        console.error("Add Product Error:", err);
+        throw err; // Propagate error so UI can react
     }
   };
   
@@ -536,7 +543,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             const allNewCategories = newProductsData.flatMap(p => p.categories);
             updateGlobalCategories(allNewCategories);
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Bulk Add Error:", err); }
   };
 
   const handleDeleteProduct = async (productId: string) => {
@@ -546,7 +553,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             await deleteDoc(doc(db, "shops", shopId, "products", productId));
             setProducts(prevProducts => prevProducts.filter(p => p.id !== productId));
         }
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Delete Product Error:", err); }
   };
 
   // Helper wrappers
@@ -657,7 +664,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleBulkUpdateWholesalePrices = (updates: { productId: string; newPrice: number; }[]) => updates.forEach(update => {
         const product = products.find(p => p.id === update.productId);
         if(product) {
-            // NOTE: Wholesale bulk update logic might need revisit for dynamic roles
             const newPriceTiers = { ...(product.priceTiers || {}), 'оптовый': update.newPrice };
             handleProductUpdate(update.productId, { priceTiers: newPriceTiers });
         }
@@ -701,14 +707,18 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleAddBadge = async (text: string, color: string) => {
       if(!db || !badgesCollection) return;
       const newBadge = { text, color };
-      const docRef = await addDoc(badgesCollection, cleanForFirestore(newBadge));
-      setBadges(prev => [...prev, { id: docRef.id, ...newBadge }]);
+      try {
+          const docRef = await addDoc(badgesCollection, cleanForFirestore(newBadge));
+          setBadges(prev => [...prev, { id: docRef.id, ...newBadge }]);
+      } catch (e) { console.error("Add badge error", e); }
   }
 
   const handleDeleteBadge = async (badgeId: string) => {
       if(!db) return;
-      await deleteDoc(doc(db, 'shops', shopId, 'badges', badgeId));
-      setBadges(prev => prev.filter(b => b.id !== badgeId));
+      try {
+          await deleteDoc(doc(db, 'shops', shopId, 'badges', badgeId));
+          setBadges(prev => prev.filter(b => b.id !== badgeId));
+      } catch (e) { console.error("Delete badge error", e); }
   }
 
   const handleOpenGalleryModal = (images: string[], index: number) => setGalleryModalInfo({ images, index });
@@ -716,24 +726,28 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleAnimationEnd = (id: number) => setFlyingItems(prev => prev.filter(item => item.id !== id));
   
   const handleAddUser = (email: string, password: string, role: string): 'success' | 'exists' => {
-      // In multi-tenant, simple "check array" works for now, but strictly should be async check in AuthContext/DB
-      // For Admin UI convenience:
       if (allUsers.some(u => u.email === email)) return 'exists';
       const newUser: User = {
         id: Date.now().toString(), email, passwordHash: simpleHash(password),
         isAdmin: false, customerType: role,
       };
-      if(db && usersCollection) addDoc(usersCollection, cleanForFirestore(newUser)).then(ref => {
-          newUser.id = ref.id;
-          setAllUsers(prev => [...prev, newUser]);
-      });
+      if(db && usersCollection) {
+          addDoc(usersCollection, cleanForFirestore(newUser))
+              .then(ref => {
+                  newUser.id = ref.id;
+                  setAllUsers(prev => [...prev, newUser]);
+              })
+              .catch(e => console.error("Add user error", e));
+      }
       return 'success';
   };
 
   const handleDeleteUser = async (userId: string) => {
       if(!db) return;
-      await deleteDoc(doc(db, 'shops', shopId, 'users', userId));
-      setAllUsers(prev => prev.filter(u => u.id !== userId));
+      try {
+          await deleteDoc(doc(db, 'shops', shopId, 'users', userId));
+          setAllUsers(prev => prev.filter(u => u.id !== userId));
+      } catch (e) { console.error("Delete user error", e); }
   };
 
   const handleUpdateUserByAdmin = async (userId: string, updates: Partial<User> & { newPassword?: string }) => {
@@ -741,7 +755,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     const updatePayload: any = { ...otherUpdates };
     if (newPassword) updatePayload.passwordHash = simpleHash(newPassword);
     
-    if(db) await updateDoc(doc(db, 'shops', shopId, 'users', userId), cleanForFirestore(updatePayload));
+    if(db) await updateDoc(doc(db, 'shops', shopId, 'users', userId), cleanForFirestore(updatePayload)).catch(e => console.error("Update user error", e));
 
     setAllUsers(prevUsers => prevUsers.map(user => user.id === userId ? { ...user, ...otherUpdates, ...(newPassword ? { passwordHash: simpleHash(newPassword) } : {}) } : user));
   };
@@ -750,20 +764,19 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       if (!db || customerRoles.includes(newRole)) return;
       const updatedRoles = [...customerRoles, newRole];
       setCustomerRoles(updatedRoles);
-      await updateDoc(doc(db, 'shops', shopId), { roles: updatedRoles });
+      await updateDoc(doc(db, 'shops', shopId), { roles: updatedRoles }).catch(e => console.error("Add role error", e));
   };
 
   const handleDeleteRole = async (role: string) => {
       if (!db || role === 'Розничный') return;
       const updatedRoles = customerRoles.filter(r => r !== role);
       setCustomerRoles(updatedRoles);
-      await updateDoc(doc(db, 'shops', shopId), { roles: updatedRoles });
+      await updateDoc(doc(db, 'shops', shopId), { roles: updatedRoles }).catch(e => console.error("Delete role error", e));
   };
 
   const handleImportData = async (data: { products: Product[]; users: User[]; orders: Order[] }) => {
      try {
         if (!Array.isArray(data.products)) throw new Error('Неверный формат данных');
-        // Import products only for simplicity in this context
         const productsToImport = data.products.map(({ id, ...p}) => p); 
         await handleBulkAddProducts(productsToImport as Omit<Product, 'id' | 'status'>[]);
         alert('Импорт товаров завершен.');
@@ -777,7 +790,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       setAdminActiveTab('orders');
   };
 
-  // --- Forced Registration Landing Page ---
+  // Landing Page flow
   if (registrationType && !currentUser) {
       return (
           <div 
@@ -785,17 +798,14 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
             style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=2574&auto=format&fit=crop)' }}
           >
               <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-              
               <div className="relative z-10 w-full max-w-md">
                   <div className="text-center mb-8">
                       <h1 className="text-3xl font-bold text-white mb-2 shadow-sm drop-shadow-md">{shopName}</h1>
                       <p className="text-gray-200 text-lg">Пожалуйста, зарегистрируйтесь для доступа к каталогу.</p>
                   </div>
-                  
                   <AuthModal
                       mode={authMode}
                       onClose={() => {
-                          // Clear registration flow on close
                           setRegistrationType(null);
                           const url = new URL(window.location.href);
                           url.searchParams.delete('registerType');
@@ -805,7 +815,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                       predefinedCustomerType={registrationType}
                       inline={true}
                   />
-                  
                   <div className="text-center mt-6">
                       <button 
                         onClick={() => {
@@ -850,7 +859,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                         </div>
                         <div className="flex justify-between gap-2">
                             <span className="text-gray-500">Сумма:</span>
-                            {/* Round cart total display for consistency */}
                             <span className="font-semibold">{Math.round(totalCartSum).toLocaleString('ru-RU')} ₽</span>
                         </div>
                         <div className="flex justify-between gap-2">
@@ -902,7 +910,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
       
       <main className="container mx-auto px-px sm:px-4 py-4">
          {view === 'admin' && currentUser?.isAdmin ? (
-            <>
               <AdminPage 
                 shopId={shopId}
                 activeTab={adminActiveTab}
@@ -944,7 +951,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 onDeleteBadge={handleDeleteBadge}
                 onUpdateProduct={handleProductUpdate}
               />
-            </>
           ) : (
             <>
               <div className="bg-white p-2 sm:p-4 rounded-lg shadow-sm mb-2 sm:mb-6">

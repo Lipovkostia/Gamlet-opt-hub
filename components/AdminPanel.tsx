@@ -144,6 +144,46 @@ const LockOpenIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
+// Helper component to render protected images from MoySklad
+const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = ({ url, auth, useProxy }) => {
+    const [src, setSrc] = useState<string>('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchImage = async () => {
+            if (!url) {
+                if (isMounted) setLoading(false);
+                return;
+            }
+            try {
+                const fetchUrl = useProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
+                const response = await fetch(fetchUrl, {
+                    headers: { 'Authorization': `Basic ${auth}` }
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const localUrl = URL.createObjectURL(blob);
+                    if (isMounted) setSrc(localUrl);
+                }
+            } catch (e) {
+                console.error("MsThumbnail: Failed to fetch MS image", e);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+        fetchImage();
+        return () => {
+            isMounted = false;
+            if (src) URL.revokeObjectURL(src);
+        };
+    }, [url, auth, useProxy]);
+
+    if (loading) return <div className="w-6 h-6 bg-gray-100 animate-pulse rounded mx-auto"></div>;
+    if (!src) return <span className="text-gray-300">—</span>;
+    return <img src={src} alt="ms-thumb" className="w-6 h-6 rounded object-cover border mx-auto shadow-xs" />;
+};
+
 const AdminPage: React.FC<AdminPageProps> = (props) => {
     const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct } = props;
     
@@ -996,8 +1036,30 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     // --- MoySklad Logic ---
 
+    // Utility to fetch protected image from MS and return as Base64 for permanent public use
+    const fetchAsBase64 = useCallback(async (url: string): Promise<string | null> => {
+        if (!msLogin || !msPassword || !url) return null;
+        const auth = btoa(`${msLogin}:${msPassword}`);
+        try {
+            const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
+            const response = await fetch(fetchUrl, {
+                headers: { 'Authorization': `Basic ${auth}` }
+            });
+            if (!response.ok) return null;
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+            });
+        } catch (e) {
+            console.error("Sync: Failed to fetch image for base64 conversion", e);
+            return null;
+        }
+    }, [msLogin, msPassword, msUseProxy]);
+
     // Map MS Row to Product updates/add
-    const mapMsItemToProduct = useCallback((item: any): Omit<Product, 'id' | 'status'> => {
+    const mapMsItemToProduct = useCallback(async (item: any): Promise<Omit<Product, 'id' | 'status'>> => {
         // Logic to normalize Unit (UOM)
         let unit: ProductUnit = 'pcs'; 
         const uomName = item.uom?.toLowerCase() || '';
@@ -1016,6 +1078,14 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             allowedPortions.push('quarter');
         }
 
+        // Handle Images: Convert them to public Base64 during sync
+        let processedImages: string[] = [];
+        if (item.images && item.images.length > 0) {
+            const imagePromises = item.images.slice(0, 5).map((url: string) => fetchAsBase64(url).catch(() => null));
+            const base64Results = await Promise.all(imagePromises);
+            processedImages = base64Results.filter((res): res is string => res !== null);
+        }
+
         const baseProduct: any = {
             name: item.name || '',
             description: (item.description && item.description !== '-') ? item.description : '',
@@ -1024,40 +1094,35 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             unitValue: item.weight > 0 ? item.weight : 1,
             unit: unit,
             packaging: packaging,
-            categories: (item.category && item.category !== '-') ? [item.category] : [],
-            imageUrls: item.images || [],
+            categories: (item.categories && item.categories !== '-') ? [item.categories] : [],
+            imageUrls: processedImages.length > 0 ? processedImages : [],
             allowedPortions: allowedPortions,
             priceOverridesPerUnit: {},
             usp1UseGlobalMarkup: true,
+            msId: item.id
         };
 
-        // Apply Custom Mappings
-        Object.entries(msMapping).forEach(([msField, targetField]) => {
-            if (!targetField) return;
+        // Apply Custom Mappings (Override defaults)
+        for (const [msField, targetField] of Object.entries(msMapping)) {
+            if (!targetField) continue;
             let value = (item as any)[msField];
-            
-            // Only apply if value exists to avoid 'undefined' in Firestore
-            if (value === undefined || value === null) return;
+            if (value === undefined || value === null) continue;
 
-            // Special conversion for prices
             if (targetField === 'pricePerUnit' || targetField === 'costPrice' || targetField === 'unitValue') {
                 value = parseFloat(value) || 0;
             }
             if (targetField === 'categories') {
-                value = value !== '-' ? [value] : [];
+                value = (value && value !== '-') ? [value] : [];
             }
             if (targetField === 'imageUrls') {
-                value = Array.isArray(value) ? value : [];
+                continue; 
             }
 
             baseProduct[targetField] = value;
-        });
-
-        // Forced overwrite of msId to ensure it's ALWAYS present regardless of mapping
-        baseProduct.msId = item.id;
+        }
 
         return baseProduct as Omit<Product, 'id' | 'status'>;
-    }, [msMapping]);
+    }, [msMapping, fetchAsBase64]);
 
     const performAutoSync = useCallback(async (freshData: any[]) => {
         const lockedItems = freshData.filter(item => msLockedIds.has(item.id));
@@ -1066,34 +1131,43 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         const updates: {id: string, updates: Partial<Product>}[] = [];
         const toAdd: Omit<Product, 'id' | 'status'>[] = [];
 
-        lockedItems.forEach(msItem => {
-            const existing = products.find(p => p.msId === msItem.id);
-            const mapped = mapMsItemToProduct(msItem);
+        for (const msItem of lockedItems) {
+            try {
+                const existing = products.find(p => p.msId === msItem.id);
+                const mapped = await mapMsItemToProduct(msItem);
 
-            if (existing) {
-                // Check if anything actually changed to avoid redundant DB writes
-                const hasChanged = 
-                    existing.name !== mapped.name || 
-                    existing.description !== mapped.description ||
-                    existing.pricePerUnit !== mapped.pricePerUnit ||
-                    existing.costPrice !== mapped.costPrice ||
-                    existing.unitValue !== mapped.unitValue;
+                if (existing) {
+                    const hasChanged = 
+                        existing.name !== mapped.name || 
+                        existing.description !== mapped.description ||
+                        existing.pricePerUnit !== mapped.pricePerUnit ||
+                        existing.costPrice !== mapped.costPrice ||
+                        existing.unitValue !== mapped.unitValue;
 
-                if (hasChanged) {
-                    updates.push({ id: existing.id, updates: mapped });
+                    if (hasChanged) {
+                        updates.push({ id: existing.id, updates: mapped });
+                    }
+                } else {
+                    toAdd.push(mapped);
                 }
-            } else {
-                toAdd.push(mapped);
+            } catch (e) {
+                console.error(`Auto-sync: item ${msItem.id} failed`, e);
             }
-        });
+        }
 
         if (updates.length > 0) {
-            console.log(`Auto-sync: updating ${updates.length} products`);
-            await Promise.all(updates.map(u => onUpdateProduct(u.id, u.updates)));
+            try {
+                await Promise.all(updates.map(u => onUpdateProduct(u.id, u.updates)));
+            } catch (e) {
+                console.error("Auto-sync updates failed", e);
+            }
         }
         if (toAdd.length > 0) {
-            console.log(`Auto-sync: adding ${toAdd.length} new products`);
-            onBulkAddProducts(toAdd);
+            try {
+                await onBulkAddProducts(toAdd);
+            } catch (e) {
+                console.error("Auto-sync add failed", e);
+            }
         }
     }, [msLockedIds, products, mapMsItemToProduct, onUpdateProduct, onBulkAddProducts]);
 
@@ -1137,26 +1211,33 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             const data = await response.json();
             
             if (data && data.rows) {
-                const processed = data.rows.map((item: any) => ({
-                    id: item.id,
-                    name: item.name,
-                    buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
-                    salePrice: (item.salePrices && item.salePrices.length > 0) ? item.salePrices[0].value / 100 : 0,
-                    article: item.article || '-',
-                    code: item.code || '-',
-                    description: item.description || '-',
-                    uom: item.uom?.name || '-',
-                    weight: item.weight || 0,
-                    volume: item.volume || 0,
-                    barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-',
-                    category: item.productFolder?.name || '-',
-                    images: item.images?.rows?.map((img: any) => img.miniature?.href || img.downloadHref).filter(Boolean) || []
-                }));
+                const processed = data.rows.map((item: any) => {
+                    const imageRows = item.images?.rows || [];
+                    const imageLinks = imageRows.map((img: any) => 
+                        img.miniature?.href || img.tiny?.href || img.downloadHref || img.meta?.downloadHref
+                    ).filter(Boolean);
+
+                    return {
+                        id: item.id,
+                        name: item.name,
+                        buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
+                        salePrice: (item.salePrices && item.salePrices.length > 0) ? item.salePrices[0].value / 100 : 0,
+                        article: item.article || '-',
+                        code: item.code || '-',
+                        description: item.description || '-',
+                        uom: item.uom?.name || '-',
+                        weight: item.weight || 0,
+                        volume: item.volume || 0,
+                        barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-',
+                        // "Группа" в MS — это productFolder
+                        categories: item.productFolder?.name || '-',
+                        images: imageLinks
+                    };
+                });
                 setMsData(processed);
                 setMsIsConnected(true);
 
-                // Run Auto-Sync logic
-                performAutoSync(processed);
+                await performAutoSync(processed);
 
             } else {
                 setMsData([]);
@@ -1176,7 +1257,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         let interval: ReturnType<typeof setInterval>;
         if (msAutoRefresh && activeTab === 'moysklad' && msLogin && msPassword) {
             interval = setInterval(() => {
-                handleLoadMoySklad(true); 
+                handleLoadMoySklad(true).catch(() => {}); 
             }, msRefreshInterval * 1000);
         }
         return () => clearInterval(interval);
@@ -1213,28 +1294,27 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
         setMsLoading(true);
         const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
-        const productsToProcess = selectedItems.map(item => mapMsItemToProduct(item));
-
+        
         const updates: Promise<void>[] = [];
         const toAdd: any[] = [];
 
-        productsToProcess.forEach(p => {
-            const existing = products.find(ep => ep.msId === p.msId);
-            if (existing) {
-                updates.push(onUpdateProduct(existing.id, p));
-            } else {
-                toAdd.push(p);
+        for (const item of selectedItems) {
+            try {
+                const p = await mapMsItemToProduct(item);
+                const existing = products.find(ep => ep.msId === p.msId);
+                if (existing) {
+                    updates.push(onUpdateProduct(existing.id, p));
+                } else {
+                    toAdd.push(p);
+                }
+            } catch (e) {
+                console.error(`Sync: item ${item.id} failed`, e);
             }
-        });
+        }
 
         try {
-            if (updates.length > 0) {
-                await Promise.all(updates);
-            }
-            if (toAdd.length > 0) {
-                // Ensure bulk add is properly awaited if it's async
-                await onBulkAddProducts(toAdd);
-            }
+            if (updates.length > 0) await Promise.all(updates);
+            if (toAdd.length > 0) await onBulkAddProducts(toAdd);
             alert(`Синхронизация завершена.\nОбновлено: ${updates.length}\nДобавлено новых: ${toAdd.length}`);
             setSelectedMsIds(new Set());
         } catch (e) {
@@ -1250,15 +1330,22 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         
         setMsLoading(true);
         const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
-        const productsToCreate = selectedItems.map(item => {
-            const p = mapMsItemToProduct(item);
-            // Ensure we remove any existing ID-like fields if any mapping accidentally added them
-            return p;
-        });
+        const productsToCreate: any[] = [];
+
+        for (const item of selectedItems) {
+            try {
+                const p = await mapMsItemToProduct(item);
+                productsToCreate.push(p);
+            } catch (e) {
+                console.error(`AddAsNew: item ${item.id} failed`, e);
+            }
+        }
 
         try {
-            await onBulkAddProducts(productsToCreate);
-            alert(`Успешно добавлено ${productsToCreate.length} новых товаров в справочник.`);
+            if (productsToCreate.length > 0) {
+                await onBulkAddProducts(productsToCreate);
+                alert(`Успешно добавлено ${productsToCreate.length} новых товаров в справочник.`);
+            }
             setSelectedMsIds(new Set());
         } catch (e) {
             console.error(e);
@@ -1271,7 +1358,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const msSourceFields = [
         { key: 'images', label: 'Фото' },
         { key: 'name', label: 'Наименование' },
-        { key: 'categories', label: 'Категория' },
+        { key: 'categories', label: 'Группа (Категория)' },
         { key: 'buyPrice', label: 'Себестоимость' },
         { key: 'salePrice', label: 'Цена' },
         { key: 'article', label: 'Артикул' },
@@ -1302,7 +1389,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 >
                     <span>ID магазина: {shopId}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transform transition-transform ${isIdInfoVisible ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 11(1.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                 </button>
             </div>
@@ -1652,6 +1739,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         {msData.map((item) => {
                                             const isLocked = msLockedIds.has(item.id);
                                             const linkedProduct = products.find(p => p.msId === item.id);
+                                            const authStr = btoa(`${msLogin}:${msPassword}`);
                                             return (
                                                 <tr key={item.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''} ${isLocked ? 'bg-blue-50/20' : ''}`}>
                                                     <td className="px-2 py-2 border-r text-center">
@@ -1675,12 +1763,16 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                                     {msFields.images && (
                                                         <td className="px-2 py-2 border-r text-center">
                                                             {item.images && item.images.length > 0 ? (
-                                                                <img src={item.images[0]} alt="p" className="w-6 h-6 rounded object-cover border mx-auto shadow-xs" />
+                                                                <MsThumbnail 
+                                                                    url={item.images[0]} 
+                                                                    auth={authStr} 
+                                                                    useProxy={msUseProxy} 
+                                                                />
                                                             ) : <span className="text-gray-300">—</span>}
                                                         </td>
                                                     )}
                                                     {msFields.name && <td className="px-2 py-2 border-r font-medium text-gray-900 truncate" title={item.name}>{item.name}</td>}
-                                                    {msFields.categories && <td className="px-2 py-2 border-r"><span className="px-1.5 py-0.5 bg-gray-100 rounded text-[9px] font-medium text-gray-600">{item.category}</span></td>}
+                                                    {msFields.categories && <td className="px-2 py-2 border-r"><span className="px-1.5 py-0.5 bg-gray-100 rounded text-[9px] font-medium text-gray-600">{item.categories}</span></td>}
                                                     {msFields.buyPrice && <td className="px-2 py-2 border-r whitespace-nowrap">{item.buyPrice.toLocaleString('ru-RU')} ₽</td>}
                                                     {msFields.salePrice && <td className="px-2 py-2 border-r whitespace-nowrap">{item.salePrice.toLocaleString('ru-RU')} ₽</td>}
                                                     {msFields.article && <td className="px-2 py-2 border-r truncate">{item.article}</td>}

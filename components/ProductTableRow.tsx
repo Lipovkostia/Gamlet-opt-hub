@@ -63,6 +63,12 @@ const CheckIcon: React.FC<{className?: string}> = ({className}) => (
     </svg>
 );
 
+const CloudIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+    </svg>
+);
+
 const ProductTableRow: React.FC<ProductTableRowProps> = ({ 
     product, 
     allCategories, 
@@ -390,7 +396,19 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                 </div>
             </td>
         ),
-        name: <td key="name" className={cellFlush}><input type="text" name="name" value={editedProduct.name} onChange={handleGenericChange} onBlur={handleSave} onKeyDown={handleKeyDown} className={flushInputClasses} /></td>,
+        name: (
+            <td key="name" className={cellFlush}>
+                <div className="flex items-center h-full w-full">
+                    <input type="text" name="name" value={editedProduct.name} onChange={handleGenericChange} onBlur={handleSave} onKeyDown={handleKeyDown} className={`${flushInputClasses} flex-grow font-semibold`} />
+                    {product.msId && (
+                        <div className="px-1 flex items-center gap-0.5 cursor-help" title="🔗 Синхронизировано с МойСклад">
+                            <CloudIcon className="w-3.5 h-3.5 text-indigo-500" />
+                            <span className="text-[8px] font-extrabold text-indigo-600">MS</span>
+                        </div>
+                    )}
+                </div>
+            </td>
+        ),
         description: <td key="description" className={cellFlush}><textarea name="description" value={editedProduct.description} onChange={handleGenericChange} onBlur={handleSave} onKeyDown={handleKeyDown} rows={1} className={`${flushInputClasses} min-h-[2rem] resize-none overflow-hidden hover:overflow-auto`} /></td>,
         categories: (
             <td key="categories" className={cellPadded}>
@@ -398,7 +416,12 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                     <button onClick={() => setCategoryPopoverOpen(o => !o)} className="text-xs text-left w-full truncate px-1 hover:text-indigo-600">{editedProduct.categories.length > 0 ? editedProduct.categories.join(', ') : <span className="text-gray-400">Нет</span>}</button>
                      {isCategoryPopoverOpen && (
                         <div ref={categoryEditorRef} className="absolute z-10 mt-1 w-56 bg-white border border-gray-300 rounded shadow-lg p-2 top-full left-0">
-                            <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2">{allPossibleCategories.map(cat => (<div key={cat} className="flex items-center"><input id={`table-cat-${product.id}-${cat}`} type="checkbox" checked={editedProduct.categories.includes(cat)} onChange={() => { handleCategoryToggle(cat); setIsDirty(true); }} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`table-cat-${product.id}-${cat}`} className="ml-1.5 block text-xs text-gray-900">{cat}</label></div>))}</div>
+                            <div className="space-y-0.5 max-h-32 overflow-y-auto mb-2">{allPossibleCategories.map(cat => (
+                                <div key={cat} className="flex items-center">
+                                    <input id={`table-cat-${product.id}-${cat}`} type="checkbox" checked={editedProduct.categories.includes(cat)} onChange={() => { handleCategoryToggle(cat); setIsDirty(true); }} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/>
+                                    <label htmlFor={`table-cat-${product.id}-${cat}`} className="ml-1.5 block text-xs text-gray-900">{cat}</label>
+                                </div>
+                            ))}</div>
                             <div className="flex items-center gap-1"><input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => {if(e.key === 'Enter'){e.preventDefault(); handleAddNewCategory();}}} placeholder="Категория" className="block w-full px-1 py-0.5 border border-gray-300 rounded text-xs"/><button type="button" onClick={handleAddNewCategory} className="px-1 py-0.5 bg-gray-200 text-xs rounded hover:bg-gray-300">+</button></div>
                             <div className="mt-2 pt-2 border-t flex justify-end"><button onClick={() => { handleSave(); setCategoryPopoverOpen(false); }} className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700">ОК</button></div>
                         </div>

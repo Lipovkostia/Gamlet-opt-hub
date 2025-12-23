@@ -1,3 +1,4 @@
+
 export enum ProductStatus {
   Available = 'available',
   OutOfStock = 'out_of_stock',
@@ -35,6 +36,7 @@ export interface Badge {
 
 export interface Product {
   id: string;
+  msId?: string; // Связь с МойСклад
   name: string;
   pricePerUnit: number;
   categories: string[];

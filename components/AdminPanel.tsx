@@ -18,8 +18,8 @@ type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders'
 
 interface AdminPageProps {
     shopId: string;
-    activeTab: AdminTabType; // Controlled prop
-    onTabChange: (tab: AdminTabType) => void; // Controlled prop callback
+    activeTab: AdminTabType;
+    onTabChange: (tab: AdminTabType) => void;
     products: Product[];
     allCategories: string[];
     orders: Order[];
@@ -55,6 +55,7 @@ interface AdminPageProps {
     onDeleteRole: (role: string) => void;
     onAddBadge: (text: string, color: string) => void;
     onDeleteBadge: (badgeId: string) => void;
+    onUpdateProduct: (productId: string, updates: Partial<Product>) => Promise<void>;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -125,9 +126,26 @@ const CloudDownloadIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
+const RefreshIcon: React.FC<{className?: string}> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+    </svg>
+);
+
+const LockClosedIcon: React.FC<{className?: string}> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+    </svg>
+);
+
+const LockOpenIcon: React.FC<{className?: string}> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
+    </svg>
+);
+
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    // FIX: Removed duplicate onUpdateUspMarkupFlags from the destructuring of props.
-    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides } = props;
+    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct } = props;
     
     // Form state
     const [name, setName] = useState('');
@@ -158,6 +176,33 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [msError, setMsError] = useState('');
     const [msUseProxy, setMsUseProxy] = useState(() => localStorage.getItem('ms_useProxy') !== 'false');
     const [msAutoRefresh, setMsAutoRefresh] = useState(() => localStorage.getItem('ms_autoRefresh') === 'true');
+    const [msRefreshInterval, setMsRefreshInterval] = useState(() => parseInt(localStorage.getItem('ms_refresh_interval') || '5', 10));
+    const [msIsConnected, setMsIsConnected] = useState<boolean | null>(null);
+
+    // Mapping State
+    const [msMapping, setMsMapping] = useState<Record<string, string>>(() => {
+        try {
+            const saved = localStorage.getItem('ms_mapping');
+            return saved ? JSON.parse(saved) : {
+                name: 'name',
+                categories: 'categories',
+                buyPrice: 'costPrice',
+                salePrice: 'pricePerUnit',
+                description: 'description',
+                weight: 'unitValue',
+                images: 'imageUrls'
+            };
+        } catch(e) { return {}; }
+    });
+
+    // Sync State (Locked IDs)
+    const [msLockedIds, setMsLockedIds] = useState<Set<string>>(() => {
+        try {
+            const saved = localStorage.getItem('ms_locked_ids');
+            return saved ? new Set(JSON.parse(saved)) : new Set();
+        } catch(e) { return new Set(); }
+    });
+
     const [msFields, setMsFields] = useState(() => {
         try {
             const saved = localStorage.getItem('ms_fields');
@@ -166,14 +211,16 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         return {
             name: true,
             buyPrice: true,
-            salePrice: false,
+            salePrice: true,
             article: false,
             code: false,
-            description: false,
-            uom: false,
-            weight: false,
+            description: true,
+            uom: true,
+            weight: true,
             volume: false,
             barcodes: false,
+            images: true,
+            categories: true,
         };
     });
     // MoySklad Selection State
@@ -187,7 +234,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     useEffect(() => { localStorage.setItem('ms_password', msPassword); }, [msPassword]);
     useEffect(() => { localStorage.setItem('ms_useProxy', String(msUseProxy)); }, [msUseProxy]);
     useEffect(() => { localStorage.setItem('ms_autoRefresh', String(msAutoRefresh)); }, [msAutoRefresh]);
+    useEffect(() => { localStorage.setItem('ms_refresh_interval', String(msRefreshInterval)); }, [msRefreshInterval]);
     useEffect(() => { localStorage.setItem('ms_fields', JSON.stringify(msFields)); }, [msFields]);
+    useEffect(() => { localStorage.setItem('ms_mapping', JSON.stringify(msMapping)); }, [msMapping]);
+    useEffect(() => { localStorage.setItem('ms_locked_ids', JSON.stringify(Array.from(msLockedIds))); }, [msLockedIds]);
     useEffect(() => { 
         try {
             localStorage.setItem('ms_data_cache', JSON.stringify(msData)); 
@@ -945,25 +995,127 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     }
 
     // --- MoySklad Logic ---
+
+    // Map MS Row to Product updates/add
+    const mapMsItemToProduct = useCallback((item: any): Omit<Product, 'id' | 'status'> => {
+        // Logic to normalize Unit (UOM)
+        let unit: ProductUnit = 'pcs'; 
+        const uomName = item.uom?.toLowerCase() || '';
+        if (uomName.includes('кг') || uomName.includes('kg')) unit = 'kg';
+        else if (uomName.includes('л') || uomName.includes('l')) unit = 'l';
+        else if (uomName.includes('г') || uomName.includes('g')) unit = 'g';
+        else if (uomName.includes('шт') || uomName.includes('pcs')) unit = 'pcs';
+
+        let packaging: ProductPackaging = 'штука';
+        if (unit === 'kg') packaging = 'головка';
+        else if (unit === 'l') packaging = 'банка';
+
+        const allowedPortions: ProductPortion[] = ['whole'];
+        if (packaging === 'головка') {
+            allowedPortions.push('half');
+            allowedPortions.push('quarter');
+        }
+
+        const baseProduct: any = {
+            name: item.name || '',
+            description: (item.description && item.description !== '-') ? item.description : '',
+            pricePerUnit: item.salePrice || 0,
+            costPrice: item.buyPrice || 0,
+            unitValue: item.weight > 0 ? item.weight : 1,
+            unit: unit,
+            packaging: packaging,
+            categories: (item.category && item.category !== '-') ? [item.category] : [],
+            imageUrls: item.images || [],
+            allowedPortions: allowedPortions,
+            priceOverridesPerUnit: {},
+            usp1UseGlobalMarkup: true,
+        };
+
+        // Apply Custom Mappings
+        Object.entries(msMapping).forEach(([msField, targetField]) => {
+            if (!targetField) return;
+            let value = (item as any)[msField];
+            
+            // Only apply if value exists to avoid 'undefined' in Firestore
+            if (value === undefined || value === null) return;
+
+            // Special conversion for prices
+            if (targetField === 'pricePerUnit' || targetField === 'costPrice' || targetField === 'unitValue') {
+                value = parseFloat(value) || 0;
+            }
+            if (targetField === 'categories') {
+                value = value !== '-' ? [value] : [];
+            }
+            if (targetField === 'imageUrls') {
+                value = Array.isArray(value) ? value : [];
+            }
+
+            baseProduct[targetField] = value;
+        });
+
+        // Forced overwrite of msId to ensure it's ALWAYS present regardless of mapping
+        baseProduct.msId = item.id;
+
+        return baseProduct as Omit<Product, 'id' | 'status'>;
+    }, [msMapping]);
+
+    const performAutoSync = useCallback(async (freshData: any[]) => {
+        const lockedItems = freshData.filter(item => msLockedIds.has(item.id));
+        if (lockedItems.length === 0) return;
+
+        const updates: {id: string, updates: Partial<Product>}[] = [];
+        const toAdd: Omit<Product, 'id' | 'status'>[] = [];
+
+        lockedItems.forEach(msItem => {
+            const existing = products.find(p => p.msId === msItem.id);
+            const mapped = mapMsItemToProduct(msItem);
+
+            if (existing) {
+                // Check if anything actually changed to avoid redundant DB writes
+                const hasChanged = 
+                    existing.name !== mapped.name || 
+                    existing.description !== mapped.description ||
+                    existing.pricePerUnit !== mapped.pricePerUnit ||
+                    existing.costPrice !== mapped.costPrice ||
+                    existing.unitValue !== mapped.unitValue;
+
+                if (hasChanged) {
+                    updates.push({ id: existing.id, updates: mapped });
+                }
+            } else {
+                toAdd.push(mapped);
+            }
+        });
+
+        if (updates.length > 0) {
+            console.log(`Auto-sync: updating ${updates.length} products`);
+            await Promise.all(updates.map(u => onUpdateProduct(u.id, u.updates)));
+        }
+        if (toAdd.length > 0) {
+            console.log(`Auto-sync: adding ${toAdd.length} new products`);
+            onBulkAddProducts(toAdd);
+        }
+    }, [msLockedIds, products, mapMsItemToProduct, onUpdateProduct, onBulkAddProducts]);
+
     const handleLoadMoySklad = useCallback(async (isSilent = false) => {
         setMsError('');
         if (!isSilent) {
             setMsLoading(true);
-            if (!isSilent) setSelectedMsIds(new Set()); // Only reset selection if manual full reload
+            if (!isSilent) setSelectedMsIds(new Set());
         }
 
         if (!msLogin || !msPassword) {
             setMsError('Введите логин и пароль.');
+            setMsIsConnected(false);
             if (!isSilent) setMsLoading(false);
             return;
         }
 
         try {
             const auth = btoa(`${msLogin}:${msPassword}`);
-            const limit = 1000; // Max allowed by MoySklad API per request page usually
-            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom`;
+            const limit = 1000;
+            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom,productFolder,images&t=${Date.now()}`;
             
-            // Use CORS proxy if enabled
             const fetchUrl = msUseProxy 
                 ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` 
                 : targetUrl;
@@ -972,6 +1124,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 method: 'GET',
                 headers: {
                     'Authorization': `Basic ${auth}`,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
                 }
             });
 
@@ -986,9 +1140,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 const processed = data.rows.map((item: any) => ({
                     id: item.id,
                     name: item.name,
-                    // buyPrice value is in cents (kopeks), so divide by 100
                     buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
-                    // salePrices is array, take first price value
                     salePrice: (item.salePrices && item.salePrices.length > 0) ? item.salePrices[0].value / 100 : 0,
                     article: item.article || '-',
                     code: item.code || '-',
@@ -996,31 +1148,39 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     uom: item.uom?.name || '-',
                     weight: item.weight || 0,
                     volume: item.volume || 0,
-                    barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-'
+                    barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-',
+                    category: item.productFolder?.name || '-',
+                    images: item.images?.rows?.map((img: any) => img.miniature?.href || img.downloadHref).filter(Boolean) || []
                 }));
                 setMsData(processed);
+                setMsIsConnected(true);
+
+                // Run Auto-Sync logic
+                performAutoSync(processed);
+
             } else {
                 setMsData([]);
+                setMsIsConnected(true);
             }
 
         } catch (error: any) {
             console.error("MoySklad Error:", error);
             setMsError(error.message || 'Ошибка подключения.');
+            setMsIsConnected(false);
         } finally {
             if (!isSilent) setMsLoading(false);
         }
-    }, [msLogin, msPassword, msUseProxy]);
+    }, [msLogin, msPassword, msUseProxy, performAutoSync]);
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
         if (msAutoRefresh && activeTab === 'moysklad' && msLogin && msPassword) {
-            // Poll every 5 seconds
             interval = setInterval(() => {
-                handleLoadMoySklad(true); // Silent refresh
-            }, 5000);
+                handleLoadMoySklad(true); 
+            }, msRefreshInterval * 1000);
         }
         return () => clearInterval(interval);
-    }, [msAutoRefresh, activeTab, msLogin, msPassword, handleLoadMoySklad]);
+    }, [msAutoRefresh, msRefreshInterval, activeTab, msLogin, msPassword, handleLoadMoySklad]);
 
     const handleMsToggleRow = (id: string) => {
         setSelectedMsIds(prev => {
@@ -1039,62 +1199,98 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
     };
 
-    const handleAddSelectedToCatalog = () => {
-        if (selectedMsIds.size === 0) return;
-
-        const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
-        const productsToAdd: Omit<Product, 'id' | 'status'>[] = selectedItems.map(item => {
-            
-            // Logic to normalize Unit (UOM)
-            let unit: ProductUnit = 'pcs'; // default
-            const uomName = item.uom?.toLowerCase() || '';
-            if (uomName.includes('кг') || uomName.includes('kg') || uomName.includes('килограмм')) unit = 'kg';
-            else if (uomName.includes('л') || uomName.includes('l') || uomName.includes('литр')) unit = 'l';
-            else if (uomName.includes('г') || uomName.includes('g') || uomName.includes('грамм')) unit = 'g';
-            else if (uomName.includes('шт') || uomName.includes('pcs')) unit = 'pcs';
-
-            // Determine Packaging
-            let packaging: ProductPackaging = 'штука';
-            if (unit === 'kg') packaging = 'головка';
-            else if (unit === 'l') packaging = 'банка';
-            else if (unit === 'pcs') packaging = 'штука';
-
-            // Construct Description
-            let desc = item.description !== '-' ? item.description : '';
-            const extraInfo = [];
-            if (item.article !== '-') extraInfo.push(`Артикул: ${item.article}`);
-            if (item.code !== '-') extraInfo.push(`Код: ${item.code}`);
-            if (extraInfo.length > 0) {
-                desc = desc ? `${desc}\n\n${extraInfo.join(' | ')}` : extraInfo.join(' | ');
-            }
-
-            const allowedPortions: ProductPortion[] = ['whole'];
-            if (packaging === 'головка') {
-                allowedPortions.push('half');
-                allowedPortions.push('quarter');
-            }
-
-            return {
-                name: item.name,
-                description: desc,
-                pricePerUnit: item.salePrice || 0,
-                costPrice: item.buyPrice || 0,
-                unitValue: item.weight > 0 ? item.weight : 1, // Logic: if weight from MS is 0, assume 1 unit.
-                unit: unit,
-                packaging: packaging,
-                categories: [], // Imported items have no category by default
-                imageUrls: [], // MoySklad API simple fetch doesn't include images easily
-                allowedPortions: allowedPortions,
-                priceOverridesPerUnit: {},
-                usp1UseGlobalMarkup: true,
-            };
+    const handleMsToggleLock = (id: string) => {
+        setMsLockedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
         });
-
-        onBulkAddProducts(productsToAdd);
-        alert(`Добавлено товаров в справочник: ${productsToAdd.length}`);
-        setSelectedMsIds(new Set()); // Clear selection
     };
 
+    const handleAddSelectedToCatalog = async () => {
+        if (selectedMsIds.size === 0) return;
+
+        setMsLoading(true);
+        const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
+        const productsToProcess = selectedItems.map(item => mapMsItemToProduct(item));
+
+        const updates: Promise<void>[] = [];
+        const toAdd: any[] = [];
+
+        productsToProcess.forEach(p => {
+            const existing = products.find(ep => ep.msId === p.msId);
+            if (existing) {
+                updates.push(onUpdateProduct(existing.id, p));
+            } else {
+                toAdd.push(p);
+            }
+        });
+
+        try {
+            if (updates.length > 0) {
+                await Promise.all(updates);
+            }
+            if (toAdd.length > 0) {
+                // Ensure bulk add is properly awaited if it's async
+                await onBulkAddProducts(toAdd);
+            }
+            alert(`Синхронизация завершена.\nОбновлено: ${updates.length}\nДобавлено новых: ${toAdd.length}`);
+            setSelectedMsIds(new Set());
+        } catch (e) {
+            console.error(e);
+            alert('Произошла ошибка при сохранении данных.');
+        } finally {
+            setMsLoading(false);
+        }
+    };
+
+    const handleAddAsNew = async () => {
+        if (selectedMsIds.size === 0) return;
+        
+        setMsLoading(true);
+        const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
+        const productsToCreate = selectedItems.map(item => {
+            const p = mapMsItemToProduct(item);
+            // Ensure we remove any existing ID-like fields if any mapping accidentally added them
+            return p;
+        });
+
+        try {
+            await onBulkAddProducts(productsToCreate);
+            alert(`Успешно добавлено ${productsToCreate.length} новых товаров в справочник.`);
+            setSelectedMsIds(new Set());
+        } catch (e) {
+            console.error(e);
+            alert('Ошибка при добавлении новых товаров.');
+        } finally {
+            setMsLoading(false);
+        }
+    }
+
+    const msSourceFields = [
+        { key: 'images', label: 'Фото' },
+        { key: 'name', label: 'Наименование' },
+        { key: 'categories', label: 'Категория' },
+        { key: 'buyPrice', label: 'Себестоимость' },
+        { key: 'salePrice', label: 'Цена' },
+        { key: 'article', label: 'Артикул' },
+        { key: 'code', label: 'Код' },
+        { key: 'description', label: 'Описание' },
+        { key: 'uom', label: 'Ед. изм.' },
+        { key: 'weight', label: 'Вес' },
+    ];
+
+    const targetFields = [
+        { key: '', label: 'Не импортировать' },
+        { key: 'name', label: 'Название' },
+        { key: 'description', label: 'Описание' },
+        { key: 'pricePerUnit', label: 'Цена продажи' },
+        { key: 'costPrice', label: 'Себестоимость' },
+        { key: 'unitValue', label: 'Значение ед.' },
+        { key: 'categories', label: 'Категория' },
+        { key: 'imageUrls', label: 'Изображения' },
+    ];
 
     return (
         <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-sm px-0 py-2 sm:p-6 relative w-full">
@@ -1106,7 +1302,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 >
                     <span>ID магазина: {shopId}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transform transition-transform ${isIdInfoVisible ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 11(1.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
                 </button>
             </div>
@@ -1253,7 +1449,30 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
             {activeTab === 'moysklad' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Интеграция с МойСклад</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-gray-700">Интеграция с МойСклад</h3>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full border border-gray-200">
+                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${
+                                    msIsConnected === true ? 'bg-green-500 animate-pulse' : 
+                                    msIsConnected === false ? 'bg-red-500' : 
+                                    (msLogin && msPassword) ? 'bg-yellow-500' : 'bg-gray-300'
+                                }`}></div>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                    {msIsConnected === true ? 'Активна' : msIsConnected === false ? 'Ошибка' : 'Ожидание'}
+                                </span>
+                            </div>
+                        </div>
+                        <button 
+                            type="button"
+                            onClick={() => handleLoadMoySklad(false)} 
+                            disabled={msLoading}
+                            className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                        >
+                            <RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />
+                            Обновить данные сейчас
+                        </button>
+                    </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         {/* Connection Card */}
@@ -1268,7 +1487,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     <input 
                                         type="text" 
                                         value={msLogin} 
-                                        onChange={e => setMsLogin(e.target.value)} 
+                                        onChange={e => { setMsLogin(e.target.value); setMsIsConnected(null); }} 
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
                                         placeholder="admin@example"
                                     />
@@ -1278,7 +1497,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     <input 
                                         type="password" 
                                         value={msPassword} 
-                                        onChange={e => setMsPassword(e.target.value)} 
+                                        onChange={e => { setMsPassword(e.target.value); setMsIsConnected(null); }} 
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
                                     />
                                 </div>
@@ -1299,196 +1518,190 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
                         {/* Fields Config Card */}
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3">Настройка полей</h4>
-                            <p className="text-xs text-gray-500 mb-3">Выберите данные для выгрузки в таблицу:</p>
-                            <div className="space-y-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div className="flex items-center">
-                                    <input type="checkbox" checked disabled className="h-4 w-4 text-indigo-600 border-gray-300 rounded opacity-50"/>
-                                    <label className="ml-2 text-sm text-gray-900">Наименование</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.buyPrice} 
-                                        onChange={e => setMsFields(prev => ({...prev, buyPrice: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Себестоимость</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.salePrice} 
-                                        onChange={e => setMsFields(prev => ({...prev, salePrice: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Цена продажи</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.article} 
-                                        onChange={e => setMsFields(prev => ({...prev, article: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Артикул</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.code} 
-                                        onChange={e => setMsFields(prev => ({...prev, code: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Код</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.description} 
-                                        onChange={e => setMsFields(prev => ({...prev, description: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Описание</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.uom} 
-                                        onChange={e => setMsFields(prev => ({...prev, uom: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Ед. изм.</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.weight} 
-                                        onChange={e => setMsFields(prev => ({...prev, weight: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Вес</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.volume} 
-                                        onChange={e => setMsFields(prev => ({...prev, volume: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Объем</label>
-                                </div>
-                                <div className="flex items-center">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={msFields.barcodes} 
-                                        onChange={e => setMsFields(prev => ({...prev, barcodes: e.target.checked}))} 
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 text-sm text-gray-900">Штрихкоды</label>
-                                </div>
-                            </div>
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка обновления</h4>
                             
-                            <div className="mt-4 flex justify-between items-center">
-                                <div className="flex items-center gap-2">
-                                    <input 
-                                        type="checkbox" 
-                                        id="msAutoRefresh"
-                                        checked={msAutoRefresh}
-                                        onChange={e => setMsAutoRefresh(e.target.checked)}
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="msAutoRefresh" className="text-xs text-gray-600">
-                                        Авто-обновление цен (5 сек)
-                                    </label>
+                            <div className="space-y-4">
+                                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="checkbox" 
+                                                id="msAutoRefresh"
+                                                checked={msAutoRefresh}
+                                                onChange={e => setMsAutoRefresh(e.target.checked)}
+                                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                            />
+                                            <label htmlFor="msAutoRefresh" className="text-sm font-bold text-indigo-900">
+                                                Авто-обновление
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-xs text-indigo-700">Интервал:</span>
+                                        <div className="flex items-center bg-white border border-indigo-200 rounded-md overflow-hidden">
+                                            <input 
+                                                type="number" 
+                                                min="1"
+                                                max="3600"
+                                                value={msRefreshInterval}
+                                                onChange={e => setMsRefreshInterval(Math.max(1, parseInt(e.target.value, 10) || 5))}
+                                                className="w-16 px-2 py-1 text-xs text-center focus:outline-none border-r border-indigo-100"
+                                            />
+                                            <span className="px-2 text-[10px] font-bold text-gray-400 uppercase">сек.</span>
+                                        </div>
+                                        <span className="text-[10px] text-indigo-400 italic leading-tight">
+                                            Синхронизация "замочков" <br/>будет срабатывать автоматически.
+                                        </span>
+                                    </div>
                                 </div>
-                                <button 
-                                    type="button"
-                                    onClick={() => handleLoadMoySklad(false)} 
-                                    disabled={msLoading}
-                                    className="bg-indigo-600 text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
-                                >
-                                    {msLoading ? (
-                                        <>
-                                            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                                            Загрузка...
-                                        </>
-                                    ) : 'Загрузить товары'}
-                                </button>
+
+                                <div className="space-y-1 grid grid-cols-2 gap-x-4">
+                                    {msSourceFields.map(f => (
+                                        <div key={f.key} className="flex items-center">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={msFields[f.key as keyof typeof msFields]} 
+                                                onChange={e => setMsFields(prev => ({...prev, [f.key]: e.target.checked}))} 
+                                                className="h-3.5 w-3.5 text-indigo-600 border-gray-300 rounded"
+                                            />
+                                            <label className="ml-2 text-[11px] text-gray-600 truncate">{f.label}</label>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Results Area */}
                     {msError && (
-                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200 flex items-center gap-3">
+                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div>
                             {msError}
                         </div>
                     )}
 
                     {msData.length > 0 && (
-                        <div className="bg-white border rounded-lg shadow-sm overflow-hidden">
-                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
-                                <span className="font-semibold text-gray-700 text-sm">Найдено товаров: {msData.length}</span>
+                        <div className="bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center flex-wrap gap-2">
+                                <span className="font-semibold text-gray-700 text-sm">Найдено в МойСклад: {msData.length}</span>
                                 {selectedMsIds.size > 0 && (
                                     <div className="flex items-center gap-2">
-                                        <span className="text-sm text-indigo-600 font-medium">Выбрано: {selectedMsIds.size}</span>
+                                        <span className="text-xs text-indigo-600 font-bold">Выбрано: {selectedMsIds.size}</span>
                                         <button 
                                             onClick={handleAddSelectedToCatalog}
-                                            className="bg-green-600 text-white text-xs font-bold py-1.5 px-3 rounded hover:bg-green-700 transition-colors"
+                                            disabled={msLoading}
+                                            className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+                                            title="Обновит те товары, что уже есть, или создаст недостающие"
                                         >
-                                            Добавить в Справочник товаров
+                                            Синхронизировать выбранные
+                                        </button>
+                                        <button 
+                                            onClick={handleAddAsNew}
+                                            disabled={msLoading}
+                                            className="bg-green-600 text-white text-[10px] font-bold py-1.5 px-3 rounded hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+                                            title="Принудительно создаст новые карточки товаров"
+                                        >
+                                            Добавить как новые
                                         </button>
                                     </div>
                                 )}
                             </div>
-                            <div className="overflow-x-auto max-h-[600px]">
-                                <table className="min-w-full text-sm text-left text-gray-500">
-                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0">
+
+                            <div className="overflow-x-auto max-h-[600px] border-t">
+                                <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
+                                    <thead className="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 border-b">
+                                        {/* Column Mapper Row */}
+                                        <tr className="bg-indigo-50/50">
+                                            <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
+                                            <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
+                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (
+                                                <th key={`map-${f.key}`} className="px-2 py-2 border-r bg-indigo-50">
+                                                    <select 
+                                                        value={msMapping[f.key] || ''} 
+                                                        onChange={(e) => setMsMapping(prev => ({...prev, [f.key]: e.target.value}))}
+                                                        className="w-full bg-white border border-indigo-200 rounded text-[9px] px-1 py-0.5 font-bold text-indigo-700 focus:ring-1 focus:ring-indigo-500"
+                                                    >
+                                                        {targetFields.map(tf => (
+                                                            <option key={tf.key} value={tf.key}>{tf.label}</option>
+                                                        ))}
+                                                    </select>
+                                                </th>
+                                            ))}
+                                            <th className="bg-indigo-50"></th>
+                                        </tr>
+                                        {/* Real Headers */}
                                         <tr>
-                                            <th className="px-4 py-3 w-10">
+                                            <th className="px-2 py-3 w-8 border-r text-center">
                                                 <input 
                                                     type="checkbox" 
                                                     checked={msData.length > 0 && selectedMsIds.size === msData.length}
                                                     onChange={handleMsToggleAll}
-                                                    className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                                    className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
                                                 />
                                             </th>
-                                            <th className="px-4 py-3">Наименование</th>
-                                            {msFields.buyPrice && <th className="px-4 py-3">Себестоимость</th>}
-                                            {msFields.salePrice && <th className="px-4 py-3">Цена</th>}
-                                            {msFields.article && <th className="px-4 py-3">Артикул</th>}
-                                            {msFields.code && <th className="px-4 py-3">Код</th>}
-                                            {msFields.description && <th className="px-4 py-3">Описание</th>}
-                                            {msFields.uom && <th className="px-4 py-3">Ед. изм..</th>}
-                                            {msFields.weight && <th className="px-4 py-3">Вес</th>}
-                                            {msFields.volume && <th className="px-4 py-3">Объем</th>}
-                                            {msFields.barcodes && <th className="px-4 py-3">Штрихкод</th>}
+                                            <th className="px-2 py-3 w-8 border-r text-center" title="Автоматическая синхронизация (замочек)">
+                                                <LockClosedIcon className="w-3 h-3 mx-auto text-indigo-400" />
+                                            </th>
+                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (
+                                                <th key={f.key} className="px-2 py-3 border-r font-bold truncate">{f.label}</th>
+                                            ))}
+                                            <th className="px-2 py-3 w-32 font-bold">Связь в каталоге</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        {msData.map((item) => (
-                                            <tr key={item.id} className={`bg-white border-b hover:bg-gray-50 ${selectedMsIds.has(item.id) ? 'bg-indigo-50' : ''}`}>
-                                                <td className="px-4 py-2">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={selectedMsIds.has(item.id)}
-                                                        onChange={() => handleMsToggleRow(item.id)}
-                                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                                    />
-                                                </td>
-                                                <td className="px-4 py-2 font-medium text-gray-900">{item.name}</td>
-                                                {msFields.buyPrice && <td className="px-4 py-2">{item.buyPrice.toLocaleString('ru-RU')} ₽</td>}
-                                                {msFields.salePrice && <td className="px-4 py-2">{item.salePrice.toLocaleString('ru-RU')} ₽</td>}
-                                                {msFields.article && <td className="px-4 py-2">{item.article}</td>}
-                                                {msFields.code && <td className="px-4 py-2">{item.code}</td>}
-                                                {msFields.description && <td className="px-4 py-2 max-w-xs truncate" title={item.description}>{item.description}</td>}
-                                                {msFields.uom && <td className="px-4 py-2">{item.uom}</td>}
-                                                {msFields.weight && <td className="px-4 py-2">{item.weight}</td>}
-                                                {msFields.volume && <td className="px-4 py-2">{item.volume}</td>}
-                                                {msFields.barcodes && <td className="px-4 py-2">{item.barcodes}</td>}
-                                            </tr>
-                                        ))}
+                                    <tbody className="bg-white">
+                                        {msData.map((item) => {
+                                            const isLocked = msLockedIds.has(item.id);
+                                            const linkedProduct = products.find(p => p.msId === item.id);
+                                            return (
+                                                <tr key={item.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''} ${isLocked ? 'bg-blue-50/20' : ''}`}>
+                                                    <td className="px-2 py-2 border-r text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={selectedMsIds.has(item.id)}
+                                                            onChange={() => handleMsToggleRow(item.id)}
+                                                            className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
+                                                        />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r text-center">
+                                                        <button 
+                                                            onClick={() => handleMsToggleLock(item.id)}
+                                                            className={`p-1 rounded-full transition-all transform active:scale-90 ${isLocked ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-500'}`}
+                                                            title={isLocked ? "Авто-синхронизация включена" : "Включить авто-синхронизацию"}
+                                                        >
+                                                            {isLocked ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}
+                                                        </button>
+                                                    </td>
+                                                    
+                                                    {msFields.images && (
+                                                        <td className="px-2 py-2 border-r text-center">
+                                                            {item.images && item.images.length > 0 ? (
+                                                                <img src={item.images[0]} alt="p" className="w-6 h-6 rounded object-cover border mx-auto shadow-xs" />
+                                                            ) : <span className="text-gray-300">—</span>}
+                                                        </td>
+                                                    )}
+                                                    {msFields.name && <td className="px-2 py-2 border-r font-medium text-gray-900 truncate" title={item.name}>{item.name}</td>}
+                                                    {msFields.categories && <td className="px-2 py-2 border-r"><span className="px-1.5 py-0.5 bg-gray-100 rounded text-[9px] font-medium text-gray-600">{item.category}</span></td>}
+                                                    {msFields.buyPrice && <td className="px-2 py-2 border-r whitespace-nowrap">{item.buyPrice.toLocaleString('ru-RU')} ₽</td>}
+                                                    {msFields.salePrice && <td className="px-2 py-2 border-r whitespace-nowrap">{item.salePrice.toLocaleString('ru-RU')} ₽</td>}
+                                                    {msFields.article && <td className="px-2 py-2 border-r truncate">{item.article}</td>}
+                                                    {msFields.code && <td className="px-2 py-2 border-r truncate">{item.code}</td>}
+                                                    {msFields.description && <td className="px-2 py-2 border-r truncate text-gray-400" title={item.description}>{item.description}</td>}
+                                                    {msFields.uom && <td className="px-2 py-2 border-r">{item.uom}</td>}
+                                                    {msFields.weight && <td className="px-2 py-2 border-r">{item.weight}</td>}
+                                                    
+                                                    <td className="px-2 py-2">
+                                                        {linkedProduct ? (
+                                                            <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 uppercase tracking-tighter">
+                                                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                                                Связан
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[9px] text-gray-300 font-bold uppercase tracking-tighter">Не привязан</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

@@ -18,6 +18,22 @@ const INITIAL_CATEGORIES = [
   'Козьи и овечьи'
 ];
 
+// Helper to clean objects for Firestore (removes undefined fields)
+const cleanForFirestore = (obj: any): any => {
+    if (Array.isArray(obj)) {
+        return obj.map(item => cleanForFirestore(item));
+    } else if (obj !== null && typeof obj === 'object') {
+        const clean: any = {};
+        Object.keys(obj).forEach(key => {
+            if (obj[key] !== undefined) {
+                clean[key] = cleanForFirestore(obj[key]);
+            }
+        });
+        return clean;
+    }
+    return obj;
+};
+
 // Icons
 const TruckIcon: React.FC<{ className?: string; itemCount?: number }> = ({ className, itemCount = 0 }) => {
     const MAX_BOXES = 15;
@@ -440,7 +456,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
 
     // Add to Firestore
     if (db && ordersCollection) {
-        addDoc(ordersCollection, newOrder).then(docRef => {
+        addDoc(ordersCollection, cleanForFirestore(newOrder)).then(docRef => {
             const orderWithId = { ...newOrder, id: docRef.id };
             setOrders(prev => [orderWithId, ...prev]);
         });
@@ -476,12 +492,9 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     try {
         if (db) {
             // Clean undefined values from update object before sending to Firestore
-            const cleanUpdate: any = {};
-            Object.keys(update).forEach(key => {
-                if (update[key] !== undefined) {
-                    cleanUpdate[key] = update[key];
-                }
-            });
+            const cleanUpdate = cleanForFirestore(update);
+            
+            if (Object.keys(cleanUpdate).length === 0) return;
 
             const productRef = doc(db, "shops", shopId, "products", productId);
             await updateDoc(productRef, cleanUpdate);
@@ -496,7 +509,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         return;
     }
     try {
-        const productToAdd = { ...newProductData, status: ProductStatus.Available };
+        const productToAdd = cleanForFirestore({ ...newProductData, status: ProductStatus.Available });
         const docRef = await addDoc(productsCollection, productToAdd);
         const newProduct = { ...productToAdd, id: docRef.id };
         setProducts(prevProducts => [...prevProducts, newProduct]);
@@ -510,9 +523,10 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleBulkAddProducts = async (newProductsData: Omit<Product, 'id' | 'status'>[]) => {
     try {
         if (db && productsCollection) {
-            const promises = newProductsData.map(p => 
-                addDoc(productsCollection, { ...p, status: ProductStatus.Available })
-            );
+            const promises = newProductsData.map(p => {
+                const cleaned = cleanForFirestore({ ...p, status: ProductStatus.Available });
+                return addDoc(productsCollection, cleaned);
+            });
             const docRefs = await Promise.all(promises);
             const newProducts = newProductsData.map((p, i) => ({ 
                 ...p, id: docRefs[i].id, status: ProductStatus.Available 
@@ -650,7 +664,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     });
   const handleUpdateProductUspMarkupFlags = (productId: string, flags: { usp1UseGlobalMarkup?: boolean; }) => handleProductUpdate(productId, flags);
   const handleUpdateProductUnitValue = (productId: string, newUnitValue: number) => handleProductUpdate(productId, { unitValue: newUnitValue });
-  const handleUpdateProductDetails = (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging }) => handleProductUpdate(productId, newDetails);
+  const handleUpdateProductDetails = (productId: string, newDetails: { name: string; description: string; unit: ProductUnit; packaging: ProductPackaging; }) => handleProductUpdate(productId, newDetails);
   const handleUpdateProductImages = (productId: string, newImageUrls: string[]) => handleProductUpdate(productId, { imageUrls: newImageUrls });
   const handleUpdateProductCategories = (productId: string, newCategories: string[]) => {
     handleProductUpdate(productId, { categories: newCategories });
@@ -687,7 +701,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   const handleAddBadge = async (text: string, color: string) => {
       if(!db || !badgesCollection) return;
       const newBadge = { text, color };
-      const docRef = await addDoc(badgesCollection, newBadge);
+      const docRef = await addDoc(badgesCollection, cleanForFirestore(newBadge));
       setBadges(prev => [...prev, { id: docRef.id, ...newBadge }]);
   }
 
@@ -709,7 +723,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         id: Date.now().toString(), email, passwordHash: simpleHash(password),
         isAdmin: false, customerType: role,
       };
-      if(db && usersCollection) addDoc(usersCollection, newUser).then(ref => {
+      if(db && usersCollection) addDoc(usersCollection, cleanForFirestore(newUser)).then(ref => {
           newUser.id = ref.id;
           setAllUsers(prev => [...prev, newUser]);
       });
@@ -727,7 +741,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     const updatePayload: any = { ...otherUpdates };
     if (newPassword) updatePayload.passwordHash = simpleHash(newPassword);
     
-    if(db) await updateDoc(doc(db, 'shops', shopId, 'users', userId), updatePayload);
+    if(db) await updateDoc(doc(db, 'shops', shopId, 'users', userId), cleanForFirestore(updatePayload));
 
     setAllUsers(prevUsers => prevUsers.map(user => user.id === userId ? { ...user, ...otherUpdates, ...(newPassword ? { passwordHash: simpleHash(newPassword) } : {}) } : user));
   };
@@ -774,7 +788,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
               
               <div className="relative z-10 w-full max-w-md">
                   <div className="text-center mb-8">
-                      {/* FIX: Fixed missing opening bracket for h1 tag. */}
                       <h1 className="text-3xl font-bold text-white mb-2 shadow-sm drop-shadow-md">{shopName}</h1>
                       <p className="text-gray-200 text-lg">Пожалуйста, зарегистрируйтесь для доступа к каталогу.</p>
                   </div>
@@ -875,7 +888,6 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                      <button onClick={() => setAccountModalOpen(true)} className="text-gray-600 hover:text-indigo-600 focus:outline-none" aria-label="Личный кабинет">
                          <UserIcon className="w-8 h-8"/>
                      </button>
-                     <button onClick={logout} className="text-sm font-medium text-gray-600 hover:text-indigo-600">Выйти</button>
                  </div>
              ) : (
                 <div className="flex items-center gap-2">
@@ -930,6 +942,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
                 onDeleteRole={handleDeleteRole}
                 onAddBadge={handleAddBadge}
                 onDeleteBadge={handleDeleteBadge}
+                onUpdateProduct={handleProductUpdate}
               />
             </>
           ) : (

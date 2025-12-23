@@ -97,10 +97,6 @@ const PlusIcon: React.FC<{className?: string}> = ({className}) => (
 );
 
 // NOTE: Extracted editor components to prevent focus loss on input change.
-// Defining components inside another component's render function causes them to be
-// recreated on every render, which unmounts the old component and its state (like focus).
-// By making these separate, stable components, React can update them without remounting.
-
 const PriceEditorComponent: React.FC<{
   product: Product;
   prices: { pricePerUnit: string; half_unit_override: string; quarter_unit_override: string; };
@@ -330,8 +326,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
         const rect = imgButtonRef.current.getBoundingClientRect();
         onAddToCart(product, portion, rect);
     } else {
-        // Если изображения скрыты, у нас нет элемента для анимации.
-        // Вызываем onAddToCart без startRect, чтобы пропустить анимацию, но добавить товар.
         onAddToCart(product, portion, undefined);
     }
   };
@@ -420,7 +414,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
         onUpdateImages(product.id, newImageUrls);
     };
 
-    // Helper to compress images before upload
     const compressImage = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -430,7 +423,7 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; // Resize to reasonable max width
+                    const MAX_WIDTH = 800;
                     const MAX_HEIGHT = 800;
                     let width = img.width;
                     let height = img.height;
@@ -451,7 +444,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.drawImage(img, 0, 0, width, height);
-                        // Compress to JPEG 0.7 quality
                         resolve(canvas.toDataURL('image/jpeg', 0.7));
                     } else {
                         reject(new Error("Canvas context missing"));
@@ -467,7 +459,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
         if (event.target.files && onUpdateImages) {
             const files = Array.from(event.target.files);
             try {
-                // Changed from fileToBase64 to compressImage
                 const base64Promises = files.map(compressImage);
                 const newBase64Urls = await Promise.all(base64Promises);
                 onUpdateImages(product.id, [...product.imageUrls, ...newBase64Urls]);
@@ -484,9 +475,16 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
     
     const handleOpenCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            // Explicitly request back camera for mobile devices
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                // Force play on some browsers
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play();
+                };
             }
             setIsCameraActive(true);
         } catch (err) {
@@ -509,7 +507,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
         const video = videoRef.current;
         const canvas = canvasRef.current;
         
-        // Cap resolution
         const MAX_DIM = 1000;
         let w = video.videoWidth;
         let h = video.videoHeight;
@@ -582,7 +579,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
     return Array.from(combined).sort();
   }, [allCategories, details.categories]);
 
-  // Determine Badge display data
   const badgeText = product.badge;
   let badgeColor = '';
   
@@ -591,7 +587,6 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
       if (dynamicBadge) {
           badgeColor = dynamicBadge.color;
       } else {
-          // Fallback to default styles
           badgeColor = defaultBadgeStyles[badgeText] || 'bg-gray-500';
       }
   }
@@ -799,7 +794,13 @@ const ProductItem: React.FC<ProductItemProps> = ({ product, onAddToCart, isExpan
             <div className="overflow-hidden py-2">
                 {isCameraActive ? (
                     <div className="flex flex-col items-center gap-2">
-                        <video ref={videoRef} autoPlay playsInline className="w-full h-48 object-cover rounded-lg bg-black"></video>
+                        <video 
+                            ref={videoRef} 
+                            autoPlay 
+                            playsInline 
+                            muted
+                            className="w-full h-48 object-cover rounded-lg bg-black"
+                        ></video>
                         <div className="flex gap-2">
                             <button onClick={handleTakePicture} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg">Сделать снимок</button>
                             <button onClick={stopCamera} className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg">Отмена</button>

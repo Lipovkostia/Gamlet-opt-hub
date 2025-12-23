@@ -291,7 +291,6 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         const mVal = markupValue === '' ? undefined : parseFloat(markupValue);
         const currentMarkupRule = product.tierMarkups?.[currentRoleKey];
         
-        // Improved cost comparison handles transitions from undefined/null correctly
         const costChanged = editedProduct.costPrice !== product.costPrice && 
                            !(editedProduct.costPrice === undefined && product.costPrice === undefined);
 
@@ -344,8 +343,43 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
         setIsDirty(false);
     };
 
+    const handleOpenCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = () => videoRef.current?.play();
+            }
+            setIsCameraActive(true);
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            alert("Не удалось получить доступ к камере.");
+        }
+    };
+
     const stopCamera = () => {
-        if (videoRef.current && videoRef.current.srcObject) (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+        if (videoRef.current && videoRef.current.srcObject) {
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+        setIsCameraActive(false);
+    };
+
+    const handleTakePicture = () => {
+        if (!videoRef.current || !canvasRef.current) return;
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        if (context) {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            onUpdateImages(product.id, [...product.imageUrls, dataUrl]);
+        }
+        stopCamera();
     };
 
     const getStatusInfo = () => {
@@ -378,8 +412,17 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                         <div ref={imageEditorRef} className="absolute z-10 mt-1 w-64 bg-white border border-gray-300 rounded shadow-lg p-2 left-0">
                             {isCameraActive ? (
                                 <div className="flex flex-col items-center gap-2">
-                                    <video ref={videoRef} autoPlay playsInline className="w-full h-32 object-cover bg-black"></video>
-                                    <div className="flex gap-1"><button onClick={handleSave} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Снять</button><button onClick={stopCamera} className="px-2 py-1 text-xs bg-red-500 text-white rounded">Отмена</button></div>
+                                    <video 
+                                        ref={videoRef} 
+                                        autoPlay 
+                                        playsInline 
+                                        muted 
+                                        className="w-full h-32 object-cover bg-black"
+                                    ></video>
+                                    <div className="flex gap-1">
+                                        <button onClick={handleTakePicture} className="px-2 py-1 text-xs bg-green-500 text-white rounded">Снять</button>
+                                        <button onClick={stopCamera} className="px-2 py-1 text-xs bg-red-500 text-white rounded">Отмена</button>
+                                    </div>
                                 </div>
                             ) : (
                                 <>
@@ -388,9 +431,14 @@ const ProductTableRow: React.FC<ProductTableRowProps> = ({
                                            <div key={index} className="relative flex-shrink-0 group"><img src={url} alt={`img ${index}`} className="h-16 w-16 object-cover border"/><button onClick={() => onUpdateImages(product.id, product.imageUrls.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-black bg-opacity-50 text-white p-0.5 opacity-0 group-hover:opacity-100"><TrashIcon className="w-3 h-3" /></button></div>
                                         ))}
                                     </div>
-                                    <div className="flex gap-1 justify-center"><input type="file" ref={fileInputRef} onChange={async (e) => { if(e.target.files) onUpdateImages(product.id, [...product.imageUrls, URL.createObjectURL(e.target.files[0])])}} accept="image/*" multiple className="hidden" /><button onClick={() => fileInputRef.current?.click()} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">+ Фото</button></div>
+                                    <div className="flex gap-1 justify-center">
+                                        <input type="file" ref={fileInputRef} onChange={async (e) => { if(e.target.files) onUpdateImages(product.id, [...product.imageUrls, URL.createObjectURL(e.target.files[0])])}} accept="image/*" multiple className="hidden" />
+                                        <button onClick={() => fileInputRef.current?.click()} className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600">+ Файл</button>
+                                        <button onClick={handleOpenCamera} className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700">Камера</button>
+                                    </div>
                                 </>
                             )}
+                            <canvas ref={canvasRef} className="hidden"></canvas>
                         </div>
                     )}
                 </div>

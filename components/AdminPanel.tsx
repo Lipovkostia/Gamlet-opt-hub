@@ -16,6 +16,7 @@ declare var XLSX: any;
 // Defined in App.tsx but also valid here
 type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad';
 
+// FIX: Added onCycleBadge and onImportData to AdminPageProps
 interface AdminPageProps {
     shopId: string;
     activeTab: AdminTabType;
@@ -49,13 +50,13 @@ interface AdminPageProps {
     onAddUser: (email: string, password: string, role: string) => 'success' | 'exists';
     onDeleteUser: (userId: string) => void;
     onUpdateUserByAdmin: (userId: string, updates: Partial<User> & { newPassword?: string }) => void;
-    onCycleBadge: (productId: string) => void;
-    onImportData: (data: { products: Product[], users: User[], orders: Order[] }) => void;
     onAddRole: (role: string) => void;
     onDeleteRole: (role: string) => void;
     onAddBadge: (text: string, color: string) => void;
     onDeleteBadge: (badgeId: string) => void;
     onUpdateProduct: (productId: string, updates: Partial<Product>) => Promise<void>;
+    onCycleBadge: (productId: string) => void;
+    onImportData: (data: { products: Product[]; users: User[]; orders: Order[] }) => Promise<void>;
 }
 
 const unitDisplayMap: Record<ProductUnit, string> = { kg: 'кг', g: 'гр', pcs: 'шт', l: 'л' };
@@ -144,7 +145,6 @@ const LockOpenIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
-// Helper component to render protected images from MoySklad
 const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = ({ url, auth, useProxy }) => {
     const [src, setSrc] = useState<string>('');
     const [loading, setLoading] = useState(true);
@@ -186,7 +186,8 @@ const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = 
 };
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onCycleBadge, onImportData, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct } = props;
+    // FIX: Destructured onCycleBadge and onImportData from props
+    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct, onCycleBadge, onImportData } = props;
     
     // Form state
     const [name, setName] = useState('');
@@ -315,30 +316,24 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [tableFilterCategory, setTableFilterCategory] = useState<string | 'all'>('all');
     const [tableFilterStatus, setTableFilterStatus] = useState<ProductStatus | 'all'>('all');
     const [isTableFilterVisible, setIsTableFilterVisible] = useState(false);
-    const [isMasterFilterVisible, setIsMasterFilterVisible] = useState(false); // State for master list filter visibility
+    const [isMasterFilterVisible, setIsMasterFilterVisible] = useState(false); 
     
     // Table Column Visibility
     const [visibleTableColumns, setVisibleTableColumns] = useState<string[]>(TABLE_COLUMNS_OPTIONS.map(c => c.key));
-    // Updated initial state for master columns to exclude price, markup, portions and special by default
     const [visibleMasterColumns, setVisibleMasterColumns] = useState<string[]>(
         TABLE_COLUMNS_OPTIONS.map(c => c.key).filter(k => !['price', 'markup', 'portions', 'special'].includes(k))
     );
     
-    // State for USP markups
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
-    
-    // Active Role Tab for Price List Table
     const [activePriceListRole, setActivePriceListRole] = useState<string>('Базовый (Розничный)');
 
-    // Ref for file inputs
-    const fileInputRef = useRef<HTMLInputElement>(null); // For JSON import
-    const imageFileInputRef = useRef<HTMLInputElement>(null); // For Image upload
+    const fileInputRef = useRef<HTMLInputElement>(null); 
+    const imageFileInputRef = useRef<HTMLInputElement>(null); 
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const roleSelectorRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        // Cleanup camera stream on unmount or tab switch
         return () => {
             stopCamera();
         };
@@ -361,15 +356,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const adminFilteredProducts = useMemo(() => {
         let filtered = products;
 
-        // Filter by Category
         if (adminSelectedCategory !== 'all') {
             filtered = filtered.filter(p => p.categories.includes(adminSelectedCategory));
         }
 
-        // Filter by Preview Role (Visibility)
         if (previewRole) {
             filtered = filtered.filter(p => {
-                // If visibleToRoles is undefined or empty, it's visible to everyone
                 if (!p.visibleToRoles || p.visibleToRoles.length === 0) {
                     return true;
                 }
@@ -383,7 +375,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const filteredTableProducts = useMemo(() => {
         return products
             .filter(product => {
-                // Search term filter (name or description)
                 if (tableSearchTerm === '') {
                     return true;
                 }
@@ -394,14 +385,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 );
             })
             .filter(product => {
-                // Category filter
                 if (tableFilterCategory === 'all') {
                     return true;
                 }
                 return product.categories.includes(tableFilterCategory);
             })
             .filter(product => {
-                // Status filter
                 if (tableFilterStatus === 'all') {
                     return true;
                 }
@@ -422,7 +411,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     newPrices.usp1Price = Math.round(product.costPrice * (1 + markup1 / 100));
                 }
 
-                // Only add to updates if at least one price was calculated
                 if (Object.keys(newPrices).length > 1) {
                     updates.push(newPrices);
                 }
@@ -447,19 +435,16 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     };
 
     const handleTableToggleAll = () => {
-        // Toggle based on visible products
         const visibleIds = filteredTableProducts.map(p => p.id);
         const allSelected = visibleIds.every(id => selectedProductIds.has(id));
 
         if (allSelected) {
-            // Deselect visible
             setSelectedProductIds(prev => {
                 const next = new Set(prev);
                 visibleIds.forEach(id => next.delete(id));
                 return next;
             });
         } else {
-            // Select visible
             setSelectedProductIds(prev => {
                 const next = new Set(prev);
                 visibleIds.forEach(id => next.add(id));
@@ -527,7 +512,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             categories: Array.from(selectedCategories),
             imageUrls: finalImageUrls,
             allowedPortions,
-            priceOverridesPerUnit: {}, // Initially no overrides
+            priceOverridesPerUnit: {}, 
             usp1UseGlobalMarkup: true,
         };
 
@@ -536,7 +521,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             await onAddProduct(newProduct);
             alert('Товар успешно добавлен!');
             resetForm();
-            onTabChange('pricelist'); // Switch tab to view the new product
+            onTabChange('pricelist'); 
         } catch (error) {
             console.error("Error adding product:", error);
             alert("Ошибка при добавлении товара. Возможно, размер изображений слишком велик.");
@@ -548,7 +533,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const handleToggleTableColumn = (key: string) => {
         setVisibleTableColumns(prev => {
             if (prev.includes(key)) {
-                // Prevent hiding all columns
                 if (prev.length <= 1) return prev;
                 return prev.filter(c => c !== key);
             } else {
@@ -560,7 +544,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const handleToggleMasterColumn = (key: string) => {
         setVisibleMasterColumns(prev => {
             if (prev.includes(key)) {
-                // Prevent hiding all columns
                 if (prev.length <= 1) return prev;
                 return prev.filter(c => c !== key);
             } else {
@@ -578,7 +561,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         setBadgeText('');
     };
 
-    // Helper to compress images before upload (client-side resize)
     const compressImage = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -588,7 +570,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; // Resize to reasonable max dimensions
+                    const MAX_WIDTH = 800; 
                     const MAX_HEIGHT = 800;
                     let width = img.width;
                     let height = img.height;
@@ -612,7 +594,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                          return;
                     }
                     ctx.drawImage(img, 0, 0, width, height);
-                    // Compress to JPEG 0.7 quality to save space
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     resolve(dataUrl);
                 };
@@ -626,7 +607,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         if (event.target.files) {
             const files = Array.from(event.target.files);
             try {
-                // Use compressImage instead of raw file conversion
                 const base64Promises = files.map(compressImage);
                 const newBase64Urls = await Promise.all(base64Promises);
                 setUploadedImages(prev => [...prev, ...newBase64Urls]);
@@ -634,16 +614,22 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 console.error("Error compressing/loading images:", error);
                 alert("Не удалось обработать изображения.");
             }
-            // Reset input so same file can be selected again if needed
             event.target.value = '';
         }
     };
 
     const handleOpenCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            // Request back camera for mobile devices
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                // Ensure playing on mobile browsers
+                videoRef.current.onloadedmetadata = () => {
+                    videoRef.current?.play();
+                };
             }
             setIsCameraActive(true);
         } catch (err) {
@@ -658,7 +644,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         
-        // Cap resolution for camera pictures too
         const MAX_DIM = 1000;
         let w = video.videoWidth;
         let h = video.videoHeight;
@@ -675,7 +660,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         const context = canvas.getContext('2d');
         if (context) {
             context.drawImage(video, 0, 0, w, h);
-            // Use JPEG compression
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             setUploadedImages(prev => [...prev, dataUrl]);
         }
@@ -698,7 +682,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         setIsImporting(true);
         setImportError('');
         try {
-            // Transform Google Sheet URL to a direct CSV download link
             const csvUrl = sheetUrl.replace('/edit#gid=', '/export?format=csv&gid=');
             const response = await fetch(csvUrl);
             if (!response.ok) {
@@ -714,18 +697,17 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
             const rowData = rows[rowIndex].split(',');
 
-            // Expecting: Название, Цена за кг, Описание
             if (rowData.length < 3) {
                  throw new Error('В указанной строке меньше 3 колонок. Ожидаемый формат: Название, Цена за кг, Описание.');
             }
 
             const [importedName, importedPrice, ...importedDescParts] = rowData;
-            const importedDesc = importedDescParts.join(','); // Join back if description had commas
+            const importedDesc = importedDescParts.join(','); 
 
             setName(importedName.trim());
             setPricePerUnit(importedPrice.trim().replace(/[^0-9.]/g, ''));
             setDescription(importedDesc.trim());
-            setUnit('kg'); // Importer is hardcoded for kg
+            setUnit('kg'); 
 
         } catch (error: any) {
             setImportError(error.message || 'Произошла неизвестная ошибка.');
@@ -757,7 +739,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             'да', 'нет'
         ];
         const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
-        // Set column widths for better readability
         ws['!cols'] = [
             { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 },
             { wch: 30 }, { wch: 50 }, { wch: 30 }, { wch: 50 },
@@ -788,7 +769,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 let errors = 0;
                 let errorDetails: string[] = [];
 
-                // Helper to normalize keys (fuzzy match)
                 const findKey = (row: any, ...candidates: string[]) => {
                     const rowKeys = Object.keys(row);
                     for (const candidate of candidates) {
@@ -798,17 +778,14 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     return null;
                 }
 
-                // Helper to get value
                 const getValue = (row: any, ...candidates: string[]) => {
                     const key = findKey(row, ...candidates);
                     return key ? row[key] : undefined;
                 }
 
-                // Helper to parse numbers (supports "2,5", "2 500", etc.)
                 const parseNum = (val: any): number => {
                     if (typeof val === 'number') return val;
                     if (typeof val === 'string') {
-                        // Replace comma with dot, remove spaces
                         const clean = val.replace(/,/g, '.').replace(/\s/g, '');
                         const num = parseFloat(clean);
                         return isNaN(num) ? NaN : num;
@@ -952,7 +929,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         if (!file) return;
 
         if (!window.confirm("Вы уверены, что хотите импортировать данные? Это перезапишет ВСЕ текущие товары, заказы и пользователей. Рекомендуется сначала сделать экспорт (резервную копию).")) {
-            if (event.target) event.target.value = ''; // Reset input
+            if (event.target) event.target.value = ''; 
             return;
         }
 
@@ -963,7 +940,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 if (typeof text !== 'string') throw new Error('Не удалось прочитать файл.');
                 const data = JSON.parse(text);
 
-                // Basic validation
                 if (!data.products || !data.users || !data.orders) {
                     throw new Error('Неверный формат файла. Отсутствуют необходимые поля: products, users, orders.');
                 }
@@ -973,7 +949,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             } catch (error: any) {
                 alert(`Ошибка при импорте: ${error.message}`);
             } finally {
-                if (event.target) event.target.value = ''; // Reset input
+                if (event.target) event.target.value = ''; 
             }
         };
         reader.readAsText(file);
@@ -1037,7 +1013,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     // --- MoySklad Logic ---
 
-    // Utility to fetch protected image from MS and return as Base64 for permanent public use
     const fetchAsBase64 = useCallback(async (url: string): Promise<string | null> => {
         if (!msLogin || !msPassword || !url) return null;
         const auth = btoa(`${msLogin}:${msPassword}`);
@@ -1060,9 +1035,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
     }, [msLogin, msPassword, msUseProxy]);
 
-    // Map MS Row to Product updates/add
     const mapMsItemToProduct = useCallback(async (item: any): Promise<Omit<Product, 'id' | 'status'>> => {
-        // Logic to normalize Unit (UOM)
         let unit: ProductUnit = 'pcs'; 
         const uomName = item.uom?.toLowerCase() || '';
         if (uomName.includes('кг') || uomName.includes('kg')) unit = 'kg';
@@ -1080,7 +1053,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             allowedPortions.push('quarter');
         }
 
-        // Handle Images: Convert them to public Base64 during sync
         let processedImages: string[] = [];
         if (item.images && item.images.length > 0) {
             const imagePromises = item.images.slice(0, 5).map((url: string) => fetchAsBase64(url).catch(() => null));
@@ -1104,7 +1076,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             msId: item.id
         };
 
-        // Apply Custom Mappings (Override defaults)
         for (const [msField, targetField] of Object.entries(msMapping)) {
             if (!targetField) continue;
             let value = (item as any)[msField];
@@ -1232,7 +1203,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         weight: item.weight || 0,
                         volume: item.volume || 0,
                         barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-',
-                        // "Группа" в MS — это productFolder
                         categories: item.productFolder?.name || '-',
                         images: imageLinks
                     };
@@ -1524,7 +1494,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                      </div>
                      <ProductList
                         products={adminFilteredProducts}
-                        onAddToCart={() => {}} // Dummy function, not used in admin view
+                        onAddToCart={() => {}} 
                         isAdminView={true}
                         onDeleteProduct={onDeleteProduct}
                         onCycleStatus={onCycleStatus}
@@ -1569,7 +1539,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        {/* Connection Card */}
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
                             <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
                                 <span className="bg-blue-100 text-blue-600 p-1 rounded-full"><CloudDownloadIcon className="w-4 h-4"/></span>
@@ -1610,7 +1579,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                             </div>
                         </div>
 
-                        {/* Fields Config Card */}
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
                             <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка обновления</h4>
                             
@@ -1666,7 +1634,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         </div>
                     </div>
 
-                    {/* Results Area */}
                     {msError && (
                         <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200 flex flex-col gap-2">
                             <div className="flex items-center gap-3">
@@ -1708,7 +1675,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                             <div className="overflow-x-auto max-h-[600px] border-t">
                                 <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
                                     <thead className="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 border-b">
-                                        {/* Column Mapper Row */}
                                         <tr className="bg-indigo-50/50">
                                             <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
                                             <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
@@ -1727,7 +1693,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             ))}
                                             <th className="bg-indigo-50"></th>
                                         </tr>
-                                        {/* Real Headers */}
                                         <tr>
                                             <th className="px-2 py-3 w-8 border-r text-center">
                                                 <input 
@@ -1833,7 +1798,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         <div className="overflow-hidden">
                             <div className="mb-4 bg-gray-50 p-4 rounded-lg border">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {/* Search Input */}
                                     <div>
                                         <label htmlFor="master-search" className="block text-sm font-medium text-gray-700">Поиск</label>
                                         <input
@@ -1845,7 +1809,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
-                                    {/* Category Filter */}
                                     <div>
                                         <CategoryDropdown
                                             categories={allCategories}
@@ -1854,7 +1817,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             label="Категория"
                                         />
                                     </div>
-                                    {/* Status Filter */}
                                     <div>
                                         <label htmlFor="master-status-filter" className="block text-sm font-medium text-gray-700">Статус</label>
                                         <select
@@ -1870,11 +1832,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         </select>
                                     </div>
                                     
-                                    {/* Column Selection for Master */}
                                     <div className="md:col-span-3 pt-4 border-t mt-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Отображаемые столбцы</label>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                            {/* Filtered to remove Price, Markup, Portions and Special from master view options */}
                                             {TABLE_COLUMNS_OPTIONS.filter(c => !['price', 'markup', 'portions', 'special'].includes(c.key)).map((col) => (
                                                 <div key={col.key} className="flex items-center">
                                                     <input
@@ -1897,7 +1857,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         </div>
                     </div>
 
-                    {/* Bulk Action Bar */}
                     {selectedProductIds.size > 0 && (
                         <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between animate-fade-in-up">
                             <div className="flex items-center gap-2">
@@ -1967,7 +1926,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                      </div>
 
                     <div className="mb-4">
-                        {/* Price Type Tabs */}
                         <div className="flex space-x-2 overflow-x-auto pb-2 border-b border-gray-200 mb-4">
                             {['Базовый (Розничный)', ...roles.filter(r => r !== 'Розничный')].map(role => (
                                 <button
@@ -2001,7 +1959,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         >
                             <div className="overflow-hidden">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg border">
-                                    {/* Search Input */}
                                     <div>
                                         <label htmlFor="table-search" className="block text-sm font-medium text-gray-700">Поиск</label>
                                         <input
@@ -2013,7 +1970,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                         />
                                     </div>
-                                    {/* Category Filter */}
                                     <div>
                                         <CategoryDropdown
                                             categories={allCategories}
@@ -2022,7 +1978,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                             label="Категория"
                                         />
                                     </div>
-                                    {/* Status Filter */}
                                     <div>
                                         <label htmlFor="table-status-filter" className="block text-sm font-medium text-gray-700">Статус</label>
                                         <select
@@ -2038,7 +1993,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         </select>
                                     </div>
                                     
-                                    {/* Column Selection */}
                                     <div className="md:col-span-3 pt-4 border-t mt-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-2">Отображаемые столбцы</label>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
@@ -2065,7 +2019,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     </div>
 
                     <ProductTable
-                        key={activePriceListRole} // Force re-render when switching tabs to reset internal row states
+                        key={activePriceListRole} 
                         products={filteredTableProducts}
                         allCategories={allCategories}
                         onDeleteProduct={onDeleteProduct}
@@ -2222,7 +2176,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
             {activeTab === 'add' && (
                 <div className="divide-y divide-gray-200 mt-2 sm:mt-6 px-1 sm:px-0">
-                    {/* Add Product Form */}
                     <div className="pb-8">
                         <h3 className="text-lg font-semibold text-gray-700 mb-4 mt-6">Добавить нового товара вручную</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -2297,7 +2250,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Изображения</label>
                                 
                                 <div className="space-y-3">
-                                    {/* Uploaded Images Preview */}
                                     {uploadedImages.length > 0 && (
                                         <div className="flex space-x-2 overflow-x-auto pb-2 border p-2 rounded-md">
                                             {uploadedImages.map((url, index) => (
@@ -2315,7 +2267,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         </div>
                                     )}
 
-                                    {/* Action Buttons */}
                                     {!isCameraActive && (
                                         <div className="flex flex-wrap gap-2">
                                              <input 
@@ -2345,10 +2296,15 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         </div>
                                     )}
 
-                                    {/* Camera Interface */}
                                     {isCameraActive && (
                                         <div className="flex flex-col items-center gap-2 p-2 border rounded-md bg-gray-50">
-                                            <video ref={videoRef} autoPlay playsInline className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"></video>
+                                            <video 
+                                                ref={videoRef} 
+                                                autoPlay 
+                                                playsInline 
+                                                muted
+                                                className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"
+                                            ></video>
                                             <canvas ref={canvasRef} className="hidden"></canvas>
                                             <div className="flex gap-2">
                                                 <button 

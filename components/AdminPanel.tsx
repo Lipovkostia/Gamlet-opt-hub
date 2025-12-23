@@ -1061,6 +1061,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             processedImages = base64Results.filter((res): res is string => res !== null);
         }
 
+        // Initialize with default values extracted from MS state
         const baseProduct: any = {
             name: item.name || '',
             description: (item.description && item.description !== '-') ? item.description : '',
@@ -1069,7 +1070,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             unitValue: item.weight > 0 ? item.weight : 1,
             unit: unit,
             packaging: packaging,
-            categories: (item.categories && item.categories !== '-') ? [item.categories] : [],
+            // Convert string path/name to Array for internal use
+            categories: (item.categories && item.categories !== '-') 
+                ? item.categories.split('/').map((c: string) => c.trim()).filter(Boolean)
+                : [],
             imageUrls: processedImages.length > 0 ? processedImages : [],
             allowedPortions: allowedPortions,
             priceOverridesPerUnit: {},
@@ -1086,7 +1090,10 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 value = parseFloat(value) || 0;
             }
             if (targetField === 'categories') {
-                value = (value && value !== '-') ? [value] : [];
+                // If it's a folder path string from MS, split it into parts
+                value = (value && value !== '-') 
+                    ? value.split('/').map((c: string) => c.trim()).filter(Boolean)
+                    : [];
             }
             if (targetField === 'imageUrls') {
                 continue; 
@@ -1192,6 +1199,14 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         img.miniature?.href || img.tiny?.href || img.downloadHref || img.meta?.downloadHref
                     ).filter(Boolean);
 
+                    // Robust extraction of folder path for "Category"
+                    let folderName = '-';
+                    if (item.productFolder) {
+                        const pf = item.productFolder;
+                        // pathName usually contains the hierarchy breadcrumbs
+                        folderName = pf.pathName ? `${pf.pathName}/${pf.name}` : (pf.name || '-');
+                    }
+
                     return {
                         id: item.id,
                         name: item.name,
@@ -1204,7 +1219,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         weight: item.weight || 0,
                         volume: item.volume || 0,
                         barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-',
-                        categories: item.productFolder?.name || '-',
+                        categories: folderName,
                         images: imageLinks
                     };
                 });
@@ -2370,7 +2385,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                  <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">Массовый импорт из Excel</h3>
                     <p className="text-sm text-gray-600 mb-4">
-                        Скачайте шаблон, заполните его и загрузите файл для добавления сразу нескольких товаров.
+                        Скачайте шаблон, заполнитe его и загрузите файл для добавления сразу нескольких товаров.
                     </p>
                     <div className="flex items-center gap-4">
                          <button 

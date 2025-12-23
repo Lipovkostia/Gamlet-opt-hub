@@ -133,13 +133,13 @@ const RefreshIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
-const LockClosedIcon: React.FC<{className?: string}> = ({ className }) => (
+const LockClosedIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
         <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
     </svg>
 );
 
-const LockOpenIcon: React.FC<{className?: string}> = ({ className }) => (
+const LockOpenIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
         <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z" />
     </svg>
@@ -205,26 +205,26 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // MoySklad state with persistence
-    const [msLogin, setMsLogin] = useState(() => localStorage.getItem('ms_login') || '');
-    const [msPassword, setMsPassword] = useState(() => localStorage.getItem('ms_password') || '');
+    // MoySklad state with persistence - scoped to shopId
+    const [msLogin, setMsLogin] = useState(() => localStorage.getItem(`ms_${shopId}_login`) || '');
+    const [msPassword, setMsPassword] = useState(() => localStorage.getItem(`ms_${shopId}_password`) || '');
     const [msData, setMsData] = useState<any[]>(() => {
         try {
-            const saved = localStorage.getItem('ms_data_cache');
+            const saved = localStorage.getItem(`ms_${shopId}_data_cache`);
             return saved ? JSON.parse(saved) : [];
         } catch(e) { return []; }
     });
     const [msLoading, setMsLoading] = useState(false);
     const [msError, setMsError] = useState('');
-    const [msUseProxy, setMsUseProxy] = useState(() => localStorage.getItem('ms_useProxy') !== 'false');
-    const [msAutoRefresh, setMsAutoRefresh] = useState(() => localStorage.getItem('ms_autoRefresh') === 'true');
-    const [msRefreshInterval, setMsRefreshInterval] = useState(() => parseInt(localStorage.getItem('ms_refresh_interval') || '5', 10));
+    const [msUseProxy, setMsUseProxy] = useState(() => localStorage.getItem(`ms_${shopId}_useProxy`) !== 'false');
+    const [msAutoRefresh, setMsAutoRefresh] = useState(() => localStorage.getItem(`ms_${shopId}_autoRefresh`) === 'true');
+    const [msRefreshInterval, setMsRefreshInterval] = useState(() => parseInt(localStorage.getItem(`ms_${shopId}_refresh_interval`) || '5', 10));
     const [msIsConnected, setMsIsConnected] = useState<boolean | null>(null);
 
-    // Mapping State
+    // Mapping State - scoped to shopId
     const [msMapping, setMsMapping] = useState<Record<string, string>>(() => {
         try {
-            const saved = localStorage.getItem('ms_mapping');
+            const saved = localStorage.getItem(`ms_${shopId}_mapping`);
             return saved ? JSON.parse(saved) : {
                 name: 'name',
                 categories: 'categories',
@@ -237,17 +237,17 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         } catch(e) { return {}; }
     });
 
-    // Sync State (Locked IDs)
+    // Sync State (Locked IDs) - scoped to shopId
     const [msLockedIds, setMsLockedIds] = useState<Set<string>>(() => {
         try {
-            const saved = localStorage.getItem('ms_locked_ids');
+            const saved = localStorage.getItem(`ms_${shopId}_locked_ids`);
             return saved ? new Set(JSON.parse(saved)) : new Set();
         } catch(e) { return new Set(); }
     });
 
     const [msFields, setMsFields] = useState(() => {
         try {
-            const saved = localStorage.getItem('ms_fields');
+            const saved = localStorage.getItem(`ms_${shopId}_fields`);
             if (saved) return JSON.parse(saved);
         } catch(e) {}
         return {
@@ -265,28 +265,29 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             categories: true,
         };
     });
+
     // MoySklad Selection State
     const [selectedMsIds, setSelectedMsIds] = useState<Set<string>>(new Set());
 
     // Main Table Selection State
     const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
 
-    // Persistence Effects
-    useEffect(() => { localStorage.setItem('ms_login', msLogin); }, [msLogin]);
-    useEffect(() => { localStorage.setItem('ms_password', msPassword); }, [msPassword]);
-    useEffect(() => { localStorage.setItem('ms_useProxy', String(msUseProxy)); }, [msUseProxy]);
-    useEffect(() => { localStorage.setItem('ms_autoRefresh', String(msAutoRefresh)); }, [msAutoRefresh]);
-    useEffect(() => { localStorage.setItem('ms_refresh_interval', String(msRefreshInterval)); }, [msRefreshInterval]);
-    useEffect(() => { localStorage.setItem('ms_fields', JSON.stringify(msFields)); }, [msFields]);
-    useEffect(() => { localStorage.setItem('ms_mapping', JSON.stringify(msMapping)); }, [msMapping]);
-    useEffect(() => { localStorage.setItem('ms_locked_ids', JSON.stringify(Array.from(msLockedIds))); }, [msLockedIds]);
+    // Persistence Effects - scoped to shopId
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_login`, msLogin); }, [msLogin, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_password`, msPassword); }, [msPassword, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_useProxy`, String(msUseProxy)); }, [msUseProxy, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_autoRefresh`, String(msAutoRefresh)); }, [msAutoRefresh, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_refresh_interval`, String(msRefreshInterval)); }, [msRefreshInterval, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_fields`, JSON.stringify(msFields)); }, [msFields, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_mapping`, JSON.stringify(msMapping)); }, [msMapping, shopId]);
+    useEffect(() => { localStorage.setItem(`ms_${shopId}_locked_ids`, JSON.stringify(Array.from(msLockedIds))); }, [msLockedIds, shopId]);
     useEffect(() => { 
         try {
-            localStorage.setItem('ms_data_cache', JSON.stringify(msData)); 
+            localStorage.setItem(`ms_${shopId}_data_cache`, JSON.stringify(msData)); 
         } catch(e) {
             console.error("Failed to save MS data to local storage", e);
         }
-    }, [msData]);
+    }, [msData, shopId]);
 
     // Badge state
     const [badgeText, setBadgeText] = useState('');

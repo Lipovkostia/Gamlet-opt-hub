@@ -159,7 +159,8 @@ const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = 
             try {
                 const fetchUrl = useProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
                 const response = await fetch(fetchUrl, {
-                    headers: { 'Authorization': `Basic ${auth}` }
+                    headers: { 'Authorization': `Basic ${auth}` },
+                    cache: 'no-store'
                 });
                 if (response.ok) {
                     const blob = await response.blob();
@@ -1043,7 +1044,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         try {
             const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
             const response = await fetch(fetchUrl, {
-                headers: { 'Authorization': `Basic ${auth}` }
+                headers: { 'Authorization': `Basic ${auth}` },
+                cache: 'no-store'
             });
             if (!response.ok) return null;
             const blob = await response.blob();
@@ -1196,11 +1198,12 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
             const response = await fetch(fetchUrl, {
                 method: 'GET',
+                mode: 'cors',
+                credentials: 'omit',
                 headers: {
                     'Authorization': `Basic ${auth}`,
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                }
+                },
+                cache: 'no-store'
             });
 
             if (!response.ok) {
@@ -1246,7 +1249,11 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
         } catch (error: any) {
             console.error("MoySklad Error:", error);
-            setMsError(error.message || 'Ошибка подключения.');
+            if (error instanceof TypeError && error.message.includes('failed to fetch')) {
+                 setMsError('Ошибка сети. На мобильных устройствах обязательно используйте CORS-прокси (настройка ниже).');
+            } else {
+                 setMsError(error.message || 'Ошибка подключения.');
+            }
             setMsIsConnected(false);
         } finally {
             if (!isSilent) setMsLoading(false);
@@ -1597,7 +1604,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                                     />
                                     <label htmlFor="useProxy" className="text-xs text-gray-500">
-                                        Использовать CORS-прокси (рекомендуется для работы из браузера)
+                                        Использовать CORS-прокси (обязательно для мобильных)
                                     </label>
                                 </div>
                             </div>
@@ -1661,9 +1668,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
                     {/* Results Area */}
                     {msError && (
-                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200 flex items-center gap-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div>
-                            {msError}
+                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200 flex flex-col gap-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div>
+                                <span className="font-bold">Ошибка подключения</span>
+                            </div>
+                            <p className="text-xs leading-relaxed">{msError}</p>
+                            {!msUseProxy && <p className="text-[10px] text-red-600 uppercase font-bold mt-1">Попробуйте включить CORS-прокси выше.</p>}
                         </div>
                     )}
 

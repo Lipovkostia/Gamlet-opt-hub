@@ -16,7 +16,6 @@ declare var XLSX: any;
 // Defined in App.tsx but also valid here
 type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad';
 
-// FIX: Added onCycleBadge and onImportData to AdminPageProps
 interface AdminPageProps {
     shopId: string;
     activeTab: AdminTabType;
@@ -145,6 +144,13 @@ const LockOpenIcon: React.FC<{className?: string}> = ({ className }) => (
     </svg>
 );
 
+// UTF-8 safe btoa for Russian characters
+const b64EncodeUnicode = (str: string) => {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode(parseInt(p1, 16));
+    }));
+};
+
 const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = ({ url, auth, useProxy }) => {
     const [src, setSrc] = useState<string>('');
     const [loading, setLoading] = useState(true);
@@ -186,7 +192,6 @@ const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = 
 };
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    // FIX: Destructured onCycleBadge and onImportData from props
     const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct, onCycleBadge, onImportData } = props;
     
     // Form state
@@ -280,11 +285,22 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     useEffect(() => { localStorage.setItem('ms_fields', JSON.stringify(msFields)); }, [msFields]);
     useEffect(() => { localStorage.setItem('ms_mapping', JSON.stringify(msMapping)); }, [msMapping]);
     useEffect(() => { localStorage.setItem('ms_locked_ids', JSON.stringify(Array.from(msLockedIds))); }, [msLockedIds]);
+    
+    // Memory-safe persistence for MS data
     useEffect(() => { 
+        if (!msData || msData.length === 0) return;
         try {
-            localStorage.setItem('ms_data_cache', JSON.stringify(msData)); 
+            const serialized = JSON.stringify(msData);
+            // LocalStorage has 5MB limit. If payload is too big, don't crash.
+            if (serialized.length < 4500000) {
+                localStorage.setItem('ms_data_cache', serialized); 
+            } else {
+                console.warn("MS Data is too large to cache in localStorage.");
+                localStorage.removeItem('ms_data_cache');
+            }
         } catch(e) {
-            console.error("Failed to save MS data to local storage", e);
+            console.error("Failed to save MS data to local storage (Quota exceeded)", e);
+            localStorage.removeItem('ms_data_cache');
         }
     }, [msData]);
 
@@ -1015,11 +1031,15 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     const fetchAsBase64 = useCallback(async (url: string): Promise<string | null> => {
         if (!msLogin || !msPassword || !url) return null;
-        const auth = btoa(`${msLogin}:${msPassword}`);
+        // Use UTF-8 safe encoding for credentials
+        const auth = b64EncodeUnicode(`${msLogin}:${msPassword}`);
         try {
             const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
             const response = await fetch(fetchUrl, {
-                headers: { 'Authorization': `Basic ${auth}` },
+                headers: { 
+                    'Authorization': `Basic ${auth}`,
+                    'Accept': 'image/*, */*'
+                },
                 cache: 'no-store'
             });
             if (!response.ok) return null;
@@ -1159,7 +1179,8 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
 
         try {
-            const auth = btoa(`${msLogin}:${msPassword}`);
+            // Use safe UTF-8 encoding for Basic Auth
+            const auth = b64EncodeUnicode(`${msLogin}:${msPassword}`);
             const limit = 1000;
             const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom,productFolder,images&t=${Date.now()}`;
             
@@ -1169,17 +1190,18 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
             const response = await fetch(fetchUrl, {
                 method: 'GET',
-                mode: 'cors',
-                credentials: 'omit',
                 headers: {
                     'Authorization': `Basic ${auth}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
                 },
                 cache: 'no-store'
             });
 
             if (!response.ok) {
                 if (response.status === 401) throw new Error('Ошибка авторизации. Проверьте логин и пароль.');
-                throw new Error(`Ошибка сервера: ${response.statusText}`);
+                if (response.status === 403) throw new Error('Доступ запрещен. Проверьте права API.');
+                throw new Error(`Ошибка сервера: ${response.statusText} (${response.status})`);
             }
 
             const data = await response.json();
@@ -1219,10 +1241,11 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
         } catch (error: any) {
             console.error("MoySklad Error:", error);
-            if (error instanceof TypeError && error.message.includes('failed to fetch')) {
-                 setMsError('Ошибка сети. На мобильных устройствах обязательно используйте CORS-прокси (настройка ниже).');
+            const errStr = String(error).toLowerCase();
+            if (errStr.includes('failed to fetch') || errStr.includes('load failed') || errStr.includes('network error')) {
+                 setMsError('Ошибка сети. На мобильных устройствах обязательно используйте CORS-прокси (настройка ниже). Если прокси включен, возможно сервер МойСклад временно недоступен или блокирует запрос.');
             } else {
-                 setMsError(error.message || 'Ошибка подключения.');
+                 setMsError(error.message || 'Ошибка подключения. Проверьте интернет и настройки доступа.');
             }
             setMsIsConnected(false);
         } finally {
@@ -1715,7 +1738,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         {msData.map((item) => {
                                             const isLocked = msLockedIds.has(item.id);
                                             const linkedProduct = products.find(p => p.msId === item.id);
-                                            const authStr = btoa(`${msLogin}:${msPassword}`);
+                                            const authStr = b64EncodeUnicode(`${msLogin}:${msPassword}`);
                                             return (
                                                 <tr key={item.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''} ${isLocked ? 'bg-blue-50/20' : ''}`}>
                                                     <td className="px-2 py-2 border-r text-center">

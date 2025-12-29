@@ -32,12 +32,12 @@ const ProductTicker: React.FC<{ images: string[] }> = ({ images }) => {
     if (tickerImages.length === 0) return null;
 
     return (
-        <div className="w-full bg-white/10 backdrop-blur-md border-t border-white/20 overflow-hidden py-4">
-            <div className="animate-infinite-scroll flex items-center gap-6">
+        <div className="w-full bg-white/10 backdrop-blur-md border-t border-white/20 overflow-hidden py-2">
+            <div className="animate-infinite-scroll flex items-center gap-[1px]">
                 {tickerImages.map((src, index) => (
                     <div 
                         key={index} 
-                        className="w-[30px] h-[30px] flex-shrink-0 bg-white/20 rounded shadow-sm overflow-hidden border border-white/30 flex items-center justify-center"
+                        className="w-[50px] h-[50px] flex-shrink-0 bg-white/20 overflow-hidden rounded-md flex items-center justify-center"
                     >
                         <img 
                             src={src} 
@@ -179,7 +179,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                 },
                 {
                     name: "Горгонзола Пиканте",
-                    description: "Итальянский голубой сыр с характерной остринкой. Прекрасно сочетается с медом и грушей.",
+                    description: "Итальянский голубой сыр with характерной остринкой. Прекрасно сочетается с медом и грушей.",
                     pricePerUnit: 1800,
                     unit: 'kg',
                     unitValue: 1,

@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { db, collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where } from '../lib/firebase';
+import { db, collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where, deleteDoc } from '../lib/firebase';
 import { User, ProductStatus, Shop, Product } from '../types';
 import InstructionsModal from './InstructionsModal';
 
@@ -19,6 +20,7 @@ interface LandingPageProps {
 
 interface ShopWithStats extends Shop {
     userCount: number;
+    productCount: number;
 }
 
 // Infinite scrolling ticker for product images
@@ -428,26 +430,36 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
         try {
             const querySnapshot = await getDocs(collection(db, 'shops'));
             
-            // Map shops and fetch user count for each
-            const shopsWithCounts = await Promise.all(querySnapshot.docs.map(async (doc: any) => {
-                const shopData = doc.data();
-                const usersColl = collection(db, 'shops', doc.id, 'users');
-                let count = 0;
+            // Map shops and fetch stats for each
+            const shopsWithStats = await Promise.all(querySnapshot.docs.map(async (docRef: any) => {
+                const shopData = docRef.data();
+                const shopId = docRef.id;
+                
+                // Get user count
+                let uCount = 0;
                 try {
-                    const snapshot = await getCountFromServer(usersColl);
-                    count = snapshot.data().count;
-                } catch (e) {
-                    console.warn(`Failed to count users for shop ${doc.id}`, e);
-                }
+                    const usersColl = collection(db, 'shops', shopId, 'users');
+                    const uSnap = await getCountFromServer(usersColl);
+                    uCount = uSnap.data().count;
+                } catch (e) { console.warn(`Failed to count users for shop ${shopId}`, e); }
+
+                // Get product count
+                let pCount = 0;
+                try {
+                    const productsColl = collection(db, 'shops', shopId, 'products');
+                    const pSnap = await getCountFromServer(productsColl);
+                    pCount = pSnap.data().count;
+                } catch (e) { console.warn(`Failed to count products for shop ${shopId}`, e); }
 
                 return {
-                    id: doc.id,
+                    id: shopId,
                     ...shopData,
-                    userCount: count
+                    userCount: uCount,
+                    productCount: pCount
                 } as ShopWithStats;
             }));
 
-            setAllShops(shopsWithCounts);
+            setAllShops(shopsWithStats);
         } catch (error) {
             console.error("Error fetching shops:", error);
         } finally {
@@ -475,6 +487,45 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
         }
     };
 
+    const handleClearShopCatalog = async (shopId: string, shopName: string) => {
+        if (!db) {
+            alert("База данных не подключена.");
+            return;
+        }
+
+        // Прямое выполнение без условий, если уже получили подтверждение? Нет, соблюдаем двойное подтверждение.
+        if (!window.confirm(`Вы точно хотите удалить все товары из каталога магазина "${shopName}"?`)) return;
+        if (!window.confirm(` Вы точно хотите удалить все товары из каталога?`)) return;
+
+        setIsLoadingShops(true);
+        try {
+            const productsColl = collection(db, 'shops', shopId, 'products');
+            const productsSnap = await getDocs(productsColl);
+            
+            if (productsSnap.empty) {
+                alert("Каталог уже пуст.");
+                setIsLoadingShops(false);
+                return;
+            }
+
+            // Удаляем по одному документу
+            const deletePromises = productsSnap.docs.map(pDoc => 
+                deleteDoc(doc(db, 'shops', shopId, 'products', pDoc.id))
+            );
+            
+            await Promise.all(deletePromises);
+            
+            alert(`Каталог магазина "${shopName}" очищен. Удалено товаров: ${productsSnap.size}`);
+            // Обновляем список, чтобы увидеть 0 в колонке товаров
+            await fetchShops(); 
+        } catch (e) {
+            console.error("Error clearing catalog", e);
+            alert("Произошла ошибка при очистке каталога. Проверьте права доступа.");
+        } finally {
+            setIsLoadingShops(false);
+        }
+    };
+
     const handleEnterShopAsAdmin = (shop: ShopWithStats) => {
         // Create Master Admin user object directly
         const masterUser: User = {
@@ -497,7 +548,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
     if (isSuperAdmin) {
         return (
             <div className="min-h-screen bg-gray-100 p-0 sm:p-8">
-                <div className="max-w-6xl mx-auto">
+                <div className="max-w-7xl mx-auto">
                     <div className="flex justify-between items-center mb-4 sm:mb-8 p-4 sm:p-0">
                         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Панель Супер-Админа</h1>
                         <button onClick={() => setIsSuperAdmin(false)} className="text-red-600 hover:underline">Выйти</button>
@@ -510,7 +561,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                         </div>
                         
                         {isLoadingShops ? (
-                            <div className="p-8 text-center text-gray-500">Загрузка...</div>
+                            <div className="p-12 text-center text-gray-500 flex flex-col items-center gap-4">
+                                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                                <span>Загрузка данных и выполнение операций...</span>
+                            </div>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm text-gray-600">
@@ -518,10 +572,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                                         <tr>
                                             <th className="p-4">Название</th>
                                             <th className="p-4">ID Магазина</th>
-                                            <th className="p-4">Владелец (Email)</th>
+                                            <th className="p-4">Владелец</th>
+                                            <th className="p-4">Товары</th>
                                             <th className="p-4">Покупатели</th>
-                                            <th className="p-4">Дата создания</th>
-                                            <th className="p-4 text-right">Действие</th>
+                                            <th className="p-4">Каталог</th>
+                                            <th className="p-4 text-right">Вход</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-200">
@@ -538,6 +593,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                                                 <td className="p-4 font-mono text-xs">{shop.id}</td>
                                                 <td className="p-4">{shop.ownerEmail}</td>
                                                 <td className="p-4">
+                                                    <span className="px-2.5 py-0.5 bg-gray-100 text-gray-700 rounded-full font-bold text-xs">
+                                                        {shop.productCount}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
                                                     <button 
                                                         onClick={() => handleViewUsers(shop)}
                                                         className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full hover:bg-blue-100 transition-colors font-semibold text-xs"
@@ -545,16 +605,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                                         </svg>
-                                                        {shop.userCount} чел.
+                                                        {shop.userCount}
                                                     </button>
                                                 </td>
-                                                <td className="p-4 text-xs">{shop.createdAt ? new Date(shop.createdAt).toLocaleDateString() : '-'}</td>
+                                                <td className="p-4">
+                                                    <button 
+                                                        onClick={() => handleClearShopCatalog(shop.id, shop.name)}
+                                                        className="text-[10px] uppercase font-bold text-red-600 hover:bg-red-600 hover:text-white px-2 py-1.5 rounded border border-red-200 transition-all active:scale-95"
+                                                    >
+                                                        Очистить каталог
+                                                    </button>
+                                                </td>
                                                 <td className="p-4 text-right">
                                                     <button 
                                                         onClick={() => handleEnterShopAsAdmin(shop)}
-                                                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                                        className="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                                     >
-                                                        Войти как Админ
+                                                        Админ
                                                     </button>
                                                 </td>
                                             </tr>
@@ -562,7 +629,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                                     </tbody>
                                 </table>
                                 {allShops.length === 0 && (
-                                    <div className="p-8 text-center text-gray-500">Магазины не найдены.</div>
+                                    <div className="p-12 text-center text-gray-500">Магазины не найдены.</div>
                                 )}
                             </div>
                         )}

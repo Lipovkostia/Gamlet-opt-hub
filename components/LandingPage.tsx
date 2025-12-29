@@ -1,7 +1,6 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db, collection, addDoc, getDocs, getCountFromServer, query, doc, getDoc, where } from '../lib/firebase';
-import { User, ProductStatus, Shop } from '../types';
+import { User, ProductStatus, Shop, Product } from '../types';
 import InstructionsModal from './InstructionsModal';
 
 const simpleHash = (str: string) => {
@@ -22,11 +21,43 @@ interface ShopWithStats extends Shop {
     userCount: number;
 }
 
+// Infinite scrolling ticker for product images
+const ProductTicker: React.FC<{ images: string[] }> = ({ images }) => {
+    const tickerImages = useMemo(() => {
+        if (images.length === 0) return [];
+        // Duplicate the array multiple times to ensure seamless looping across wide screens
+        return [...images, ...images, ...images, ...images];
+    }, [images]);
+
+    if (tickerImages.length === 0) return null;
+
+    return (
+        <div className="w-full bg-white/10 backdrop-blur-md border-t border-white/20 overflow-hidden py-4">
+            <div className="animate-infinite-scroll flex items-center gap-6">
+                {tickerImages.map((src, index) => (
+                    <div 
+                        key={index} 
+                        className="w-[30px] h-[30px] flex-shrink-0 bg-white/20 rounded shadow-sm overflow-hidden border border-white/30 flex items-center justify-center"
+                    >
+                        <img 
+                            src={src} 
+                            alt={`product-${index}`} 
+                            className="w-full h-full object-cover object-center"
+                            loading="lazy"
+                        />
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
     const [shopName, setShopName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [tickerImages, setTickerImages] = useState<string[]>([]);
 
     // Super Admin State
     const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -52,6 +83,38 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
 
     // Instructions Modal State
     const [isInstructionsOpen, setIsInstructionsOpen] = useState(false);
+
+    // Fetch images for ticker
+    useEffect(() => {
+        const fetchTickerImages = async () => {
+            if (!db) return;
+            try {
+                // To show something from the database, we fetch a few shops and then their products
+                const shopsSnap = await getDocs(query(collection(db, 'shops')));
+                const foundImages: string[] = [];
+                
+                // Limit to first 3 shops to avoid massive number of requests
+                const shopsToFetch = shopsSnap.docs.slice(0, 3);
+                
+                for (const shopDoc of shopsToFetch) {
+                    const productsSnap = await getDocs(query(collection(db, 'shops', shopDoc.id, 'products')));
+                    productsSnap.forEach(pDoc => {
+                        const pData = pDoc.data();
+                        if (pData.imageUrls && pData.imageUrls.length > 0) {
+                            foundImages.push(pData.imageUrls[0]);
+                        }
+                    });
+                }
+                
+                // Shuffle and limit
+                const shuffled = foundImages.sort(() => 0.5 - Math.random());
+                setTickerImages(shuffled.slice(0, 20));
+            } catch (e) {
+                console.error("Error fetching ticker images", e);
+            }
+        };
+        fetchTickerImages();
+    }, []);
 
     const handleCreateShop = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -578,7 +641,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center p-4 relative">
+        <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex flex-col items-center justify-center p-4 relative overflow-hidden">
             {/* Enter Shop Modal */}
             {showEnterShop && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -724,7 +787,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                 <InstructionsModal onClose={() => setIsInstructionsOpen(false)} />
             )}
 
-            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl w-full flex flex-col md:flex-row gap-8">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl w-full flex flex-col md:flex-row gap-8 z-10 mb-8">
                 <div className="flex-1 flex flex-col justify-center">
                     <h1 className="text-4xl font-extrabold text-gray-900 mb-4">
                         Opt-Hub
@@ -837,6 +900,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onShopCreated }) => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Infinite Product Ticker - Positioned at the bottom of the landing page */}
+            <div className="w-full mt-auto">
+                <ProductTicker images={tickerImages} />
             </div>
         </div>
     );

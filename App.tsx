@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES, Badge } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
@@ -834,7 +833,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen font-sans">
+    <div className="bg-gray-50 min-h-screen font-sans flex flex-col">
       <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -908,7 +907,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
         </div>
       </header>
       
-      <main className="container mx-auto px-px sm:px-4 py-4">
+      <main className="container mx-auto px-px sm:px-4 py-4 flex-grow">
          {view === 'admin' && currentUser?.isAdmin ? (
               <AdminPage 
                 shopId={shopId}

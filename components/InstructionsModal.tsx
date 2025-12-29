@@ -11,12 +11,6 @@ const XIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
-const MenuIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-    </svg>
-);
-
 // Mock UI components to simulate screenshots using CSS/HTML
 const MockBrowserWindow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
     <div className="border border-gray-200 rounded-lg shadow-sm overflow-hidden bg-white my-4 mx-1 sm:mx-0">
@@ -42,6 +36,7 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ onClose }) => {
     const menuItems = [
         { id: 'start', label: '🚀 Старт', fullLabel: 'Быстрый старт' },
         { id: 'products', label: '📦 Товары', fullLabel: 'Товары и Импорт' },
+        { id: 'pricelist', label: '📊 Прайс-лист', fullLabel: 'Управление ценами' },
         { id: 'roles', label: '👥 Клиенты', fullLabel: 'Клиенты и Цены' },
         { id: 'orders', label: '🛒 Заказы', fullLabel: 'Обработка заказов' },
     ];
@@ -139,11 +134,89 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ onClose }) => {
                         <div className="space-y-4">
                             <div className="flex items-center gap-3">
                                 <span className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold">2</span>
-                                <h3 className="text-lg font-bold text-gray-800">Редактирование цен</h3>
+                                <h3 className="text-lg font-bold text-gray-800">Редактирование данных</h3>
                             </div>
                             <p className="text-sm text-gray-600 pl-11">
-                                Вкладка <b>"Прайс лист"</b> позволяет менять цены как в Excel — просто кликните на ячейку с ценой и введите новое значение.
+                                Кликните на название товара в общем списке для изменения описания, категории или фото.
                             </p>
+                        </div>
+                    </div>
+                );
+            case 'pricelist':
+                return (
+                    <div className="space-y-8 pb-10">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-800 mb-2">Прайс-лист</h2>
+                            <p className="text-gray-600 leading-relaxed">
+                                Гибкое управление ценообразованием и автоматизация расчетов.
+                            </p>
+                        </div>
+
+                        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+                            <ul className="space-y-4 text-sm text-gray-700">
+                                <li className="flex gap-3">
+                                    <span className="text-indigo-500 font-bold">1.</span>
+                                    <span><b>Наценки:</b> На каждый товар можно сделать наценку в Рублях или Процентах относительно себестоимости.</span>
+                                </li>
+                                <li className="flex gap-3">
+                                    <span className="text-indigo-500 font-bold">2.</span>
+                                    <span><b>Роли:</b> Устанавливается разная цена для разных типов покупателей (Розничный, Оптовый, VIP и др.).</span>
+                                </li>
+                                <li className="flex gap-3">
+                                    <span className="text-indigo-500 font-bold">3.</span>
+                                    <span><b>Порции:</b> Выставляется спец цена в зависимости от «порции» товара. Например, за целую головку сыра (10кг) цена — 2000р/кг. Если 1/2 головки — 2100р/кг, за 1/4 — 2200р/кг.</span>
+                                </li>
+                                <li className="flex gap-3">
+                                    <span className="text-indigo-500 font-bold">4.</span>
+                                    <span><b>Кнопки заказа:</b> Покупатель видит до 3 кнопок: «Купить целой головкой», «Купить 1/2», «Купить 1/4».</span>
+                                </li>
+                                <li className="flex gap-3">
+                                    <span className="text-indigo-500 font-bold">5.</span>
+                                    <span><b>Авто-расчет:</b> Цена за килограмм автоматически перемножается на вес товара и спец цену. В корзину попадает правильный вес и сумма.</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div className="mt-6">
+                            <h3 className="font-semibold text-gray-800 mb-2 px-1 text-sm">Интерфейс «Прайс-листа» в админ-панели:</h3>
+                            <MockBrowserWindow title="Редактирование прайс-листа">
+                                <div className="text-[10px] text-gray-700 bg-white border border-gray-200 shadow-sm rounded">
+                                    <table className="min-w-full text-left border-collapse">
+                                        <thead className="bg-gray-50 border-b">
+                                            <tr>
+                                                <th className="p-2 border-r">НАЗВАНИЕ</th>
+                                                <th className="p-2 border-r">СЕБЕСТ.</th>
+                                                <th className="p-2 border-r">НАЦЕНКА</th>
+                                                <th className="p-2 border-r">ЦЕНА</th>
+                                                <th className="p-2 border-r">ВЕС</th>
+                                                <th className="p-2 border-r">ПОРЦИИ</th>
+                                                <th className="p-2">СПЕЦ.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            <tr>
+                                                <td className="p-2 border-r font-bold">Буйвол Каас, кг</td>
+                                                <td className="p-2 border-r">900</td>
+                                                <td className="p-2 border-r">% 100</td>
+                                                <td className="p-2 border-r">1800</td>
+                                                <td className="p-2 border-r">10</td>
+                                                <td className="p-2 border-r">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="flex items-center gap-1 opacity-40">☐ 1/2</span>
+                                                        <span className="flex items-center gap-1 text-indigo-600">☑ 1/4</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-2">
+                                                    <div className="space-y-1">
+                                                        <div className="border border-gray-300 px-1 text-[8px] bg-gray-50">1900</div>
+                                                        <div className="border border-gray-300 px-1 text-[8px] bg-gray-50">2000</div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </MockBrowserWindow>
                         </div>
                     </div>
                 );
@@ -318,7 +391,7 @@ const InstructionsModal: React.FC<InstructionsModalProps> = ({ onClose }) => {
                         ))}
                     </nav>
                     <div className="p-4 border-t border-gray-200 text-xs text-gray-400 text-center">
-                        Opt-Hub Help v1.1
+                        Opt-Hub Help v1.2
                     </div>
                 </div>
 

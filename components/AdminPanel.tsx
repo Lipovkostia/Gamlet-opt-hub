@@ -232,7 +232,15 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 weight: 'unitValue',
                 images: 'imageUrls'
             };
-        } catch(e) { return {}; }
+        } catch(e) { return {
+                name: 'name',
+                categories: 'categories',
+                buyPrice: 'costPrice',
+                salePrice: 'pricePerUnit',
+                description: 'description',
+                weight: 'unitValue',
+                images: 'imageUrls'
+            }; }
     });
 
     const [msLockedIds, setMsLockedIds] = useState<Set<string>>(() => {
@@ -676,14 +684,27 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     }
 
     const msSourceFields = [
-        { key: 'images', label: 'Фото' }, { key: 'name', label: 'Наименование' }, { key: 'categories', label: 'Группа' },
-        { key: 'buyPrice', label: 'Себест.' }, { key: 'salePrice', label: 'Цена' }, { key: 'article', label: 'Артикул' },
-        { key: 'code', label: 'Код' }, { key: 'description', label: 'Описание' }, { key: 'uom', label: 'Ед. изм.' }, { key: 'weight', label: 'Вес' },
+        { key: 'images', label: 'Фото' },
+        { key: 'name', label: 'Наименование' },
+        { key: 'categories', label: 'Группа' },
+        { key: 'buyPrice', label: 'Закупочная цена' },
+        { key: 'salePrice', label: 'Цена продажи' },
+        { key: 'article', label: 'Артикул' },
+        { key: 'code', label: 'Код' },
+        { key: 'description', label: 'Описание' },
+        { key: 'uom', label: 'Ед. изм.' },
+        { key: 'weight', label: 'Вес' },
     ];
+
     const targetFields = [
-        { key: '', label: 'Не импорт.' }, { key: 'name', label: 'Название' }, { key: 'description', label: 'Описание' },
-        { key: 'pricePerUnit', label: 'Цена прод.' }, { key: 'costPrice', label: 'Себест.' }, { key: 'unitValue', label: 'Вес ед.' },
-        { key: 'categories', label: 'Категория' }, { key: 'imageUrls', label: 'Изобр.' },
+        { key: '', label: 'Не импортировать' },
+        { key: 'name', label: 'Название' },
+        { key: 'description', label: 'Описание' },
+        { key: 'pricePerUnit', label: 'Цена продажи' },
+        { key: 'costPrice', label: 'Себестоимость' },
+        { key: 'unitValue', label: 'Вес ед.' },
+        { key: 'categories', label: 'Категория' },
+        { key: 'imageUrls', label: 'Изображения' },
     ];
 
     return (
@@ -720,6 +741,241 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             </div>
 
+            {activeTab === 'moysklad' && (
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold text-gray-700">Интеграция с МойСклад</h3>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full border border-gray-200">
+                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${msIsConnected === true ? 'bg-green-500 animate-pulse' : msIsConnected === false ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{msIsConnected === true ? 'Активна' : msIsConnected === false ? 'Ошибка' : 'Ожидание'}</span>
+                            </div>
+                        </div>
+                        <button 
+                            type="button" 
+                            onClick={() => handleLoadMoySklad(false)} 
+                            disabled={msLoading}
+                            className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                        >
+                            <RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />
+                            Обновить данные
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div className="bg-white p-4 border rounded-lg shadow-sm">
+                            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                <span className="bg-blue-100 text-blue-600 p-1 rounded-full"><CloudDownloadIcon className="w-4 h-4"/></span>
+                                Подключение
+                            </h4>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Логин (Email)</label>
+                                    <input 
+                                        type="text" 
+                                        value={msLogin} 
+                                        onChange={e => { setMsLogin(e.target.value); setMsIsConnected(null); }} 
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm" 
+                                        placeholder="admin@example.ru"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Пароль</label>
+                                    <input 
+                                        type="password" 
+                                        value={msPassword} 
+                                        onChange={e => { setMsPassword(e.target.value); setMsIsConnected(null); }} 
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="useProxy" 
+                                        checked={msUseProxy} 
+                                        onChange={e => setMsUseProxy(e.target.checked)}
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="useProxy" className="text-xs text-gray-500">Использовать CORS-прокси</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-4 border rounded-lg shadow-sm">
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка синхронизации полей</h4>
+                            <div className="space-y-1 grid grid-cols-1 gap-y-1.5">
+                                {msSourceFields.map(field => (
+                                    <div key={field.key} className="flex items-center justify-between gap-4 text-xs">
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={msFields[field.key as keyof typeof msFields]} 
+                                                onChange={e => setMsFields(prev => ({...prev, [field.key]: e.target.checked}))}
+                                                className="h-3.5 w-3.5 text-indigo-600 border-gray-300 rounded"
+                                            />
+                                            <span className="text-gray-600 truncate font-medium">{field.label}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] text-gray-400">→</span>
+                                            <select 
+                                                value={msMapping[field.key] || ''} 
+                                                onChange={(e) => setMsMapping(prev => ({...prev, [field.key]: e.target.value}))}
+                                                className="bg-gray-50 border border-gray-200 rounded text-[10px] px-1 py-0.5 font-bold text-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                            >
+                                                {targetFields.map(tf => (
+                                                    <option key={tf.key} value={tf.key}>{tf.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-4 pt-3 border-t">
+                                 <div className="flex items-center gap-2">
+                                    <input 
+                                        type="checkbox" 
+                                        id="msAutoRefresh" 
+                                        checked={msAutoRefresh} 
+                                        onChange={e => setMsAutoRefresh(e.target.checked)}
+                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="msAutoRefresh" className="text-xs font-semibold text-gray-600">Авто-синхронизация</label>
+                                </div>
+                                {msAutoRefresh && (
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <span className="text-[10px] text-gray-400 uppercase">Интервал:</span>
+                                        <input 
+                                            type="number" 
+                                            value={msRefreshInterval} 
+                                            onChange={e => setMsRefreshInterval(Math.max(5, parseInt(e.target.value) || 5))} 
+                                            className="w-12 px-1 border rounded text-[10px]"
+                                        />
+                                        <span className="text-[10px] text-gray-400">сек.</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {msError && (
+                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
+                            <b>Ошибка подключения:</b> {msError}
+                        </div>
+                    )}
+
+                    {msData.length > 0 && (
+                        <div className="bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center flex-wrap gap-2">
+                                <div className="flex items-center gap-3">
+                                    <span className="font-semibold text-gray-700 text-sm">Найдено товаров: {msData.length}</span>
+                                    <div className="flex items-center gap-2 text-[10px]">
+                                        <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                                        <span className="text-gray-500">Замочек = авто-обновление</span>
+                                    </div>
+                                </div>
+                                {selectedMsIds.size > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={handleAddSelectedToCatalog} 
+                                            disabled={msLoading}
+                                            className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-all active:scale-95"
+                                        >
+                                            Синхронизировать выбранные ({selectedMsIds.size})
+                                        </button>
+                                        <button 
+                                            onClick={handleAddAsNew} 
+                                            disabled={msLoading}
+                                            className="bg-green-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm hover:bg-green-700 disabled:opacity-50 transition-all active:scale-95"
+                                        >
+                                            Добавить как новые
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="overflow-x-auto max-h-[600px]">
+                                <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
+                                    <thead className="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 border-b">
+                                        <tr>
+                                            <th className="px-2 py-3 w-8 border-r text-center">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={msData.length > 0 && selectedMsIds.size === msData.length} 
+                                                    onChange={handleMsToggleAll}
+                                                    className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
+                                                />
+                                            </th>
+                                            <th className="px-2 py-3 w-8 border-r text-center" title="Авто-синхронизация при обновлении данных MS">
+                                                <LockClosedIcon className="w-3 h-3 mx-auto text-indigo-400" />
+                                            </th>
+                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(field => (
+                                                <th key={field.key} className="px-2 py-3 border-r font-bold truncate">
+                                                    {field.label}
+                                                </th>
+                                            ))}
+                                            <th className="px-2 py-3 w-20 font-bold">Связь</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white">
+                                        {msData.map((item) => {
+                                            const isLocked = msLockedIds.has(item.id);
+                                            const linkedProduct = products.find(p => p.msId === item.id);
+                                            const authStr = btoa(`${msLogin}:${msPassword}`);
+                                            
+                                            return (
+                                                <tr key={item.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}>
+                                                    <td className="px-2 py-2 border-r text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={selectedMsIds.has(item.id)} 
+                                                            onChange={() => handleMsToggleRow(item.id)}
+                                                            className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
+                                                        />
+                                                    </td>
+                                                    <td className="px-2 py-2 border-r text-center">
+                                                        <button 
+                                                            onClick={() => handleMsToggleLock(item.id)}
+                                                            className={`p-1 rounded-full transition-colors ${isLocked ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-400'}`}
+                                                            title={isLocked ? "Авто-обновление включено" : "Включить авто-обновление"}
+                                                        >
+                                                            {isLocked ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}
+                                                        </button>
+                                                    </td>
+                                                    {msFields.images && (
+                                                        <td className="px-2 py-2 border-r text-center">
+                                                            {item.images && item.images.length > 0 ? (
+                                                                <MsThumbnail url={item.images[0]} auth={authStr} useProxy={msUseProxy} />
+                                                            ) : '—'}
+                                                        </td>
+                                                    )}
+                                                    {msFields.name && <td className="px-2 py-2 border-r truncate font-medium text-gray-700">{item.name}</td>}
+                                                    {msFields.categories && <td className="px-2 py-2 border-r truncate">{item.categories}</td>}
+                                                    {msFields.buyPrice && <td className="px-2 py-2 border-r font-mono text-indigo-600">{item.buyPrice} ₽</td>}
+                                                    {msFields.salePrice && <td className="px-2 py-2 border-r font-mono font-bold text-gray-800">{item.salePrice} ₽</td>}
+                                                    {msFields.article && <td className="px-2 py-2 border-r text-gray-400">{item.article}</td>}
+                                                    {msFields.code && <td className="px-2 py-2 border-r text-gray-400">{item.code}</td>}
+                                                    {msFields.description && <td className="px-2 py-2 border-r truncate max-w-[150px]">{item.description}</td>}
+                                                    {msFields.uom && <td className="px-2 py-2 border-r text-center">{item.uom}</td>}
+                                                    {msFields.weight && <td className="px-2 py-2 border-r text-center">{item.weight}</td>}
+                                                    
+                                                    <td className="px-2 py-2 text-center">
+                                                        {linkedProduct ? (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-green-100 text-green-700 uppercase tracking-tight">Связан</span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 text-gray-400 uppercase tracking-tight">Нет</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+            
+            {/* Остальные вкладки админки ( pricelist, products_master и т.д. ) */}
             {activeTab === 'pricelist' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
@@ -733,92 +989,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     <ProductList products={adminFilteredProducts} onAddToCart={() => {}} isAdminView={true} onDeleteProduct={onDeleteProduct} onCycleStatus={onCycleStatus} onUpdatePortions={onUpdatePortions} onUpdatePrices={onUpdatePrices} onUpdateUnitValue={onUpdateUnitValue} onUpdateDetails={onUpdateDetails} onUpdateImages={onUpdateImages} allCategories={allCategories} onUpdateCategories={onUpdateCategories} onCycleBadge={onCycleBadge} badges={badges}/>
                 </div>
             )}
-
-            {activeTab === 'moysklad' && (
-                <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                            <h3 className="text-lg font-semibold text-gray-700">Интеграция с МойСклад</h3>
-                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full border border-gray-200">
-                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${msIsConnected === true ? 'bg-green-500 animate-pulse' : msIsConnected === false ? 'bg-red-500' : 'bg-gray-300'}`}></div>
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{msIsConnected === true ? 'Активна' : msIsConnected === false ? 'Ошибка' : 'Ожидание'}</span>
-                            </div>
-                        </div>
-                        <button type="button" onClick={() => handleLoadMoySklad(false)} disabled={msLoading} className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"><RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />Обновить</button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><span className="bg-blue-100 text-blue-600 p-1 rounded-full"><CloudDownloadIcon className="w-4 h-4"/></span>Подключение</h4>
-                            <div className="space-y-3">
-                                <div><label className="block text-sm font-medium text-gray-700">Логин (Email)</label><input type="text" value={msLogin} onChange={e => { setMsLogin(e.target.value); setMsIsConnected(null); }} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm" placeholder="admin@example"/></div>
-                                <div><label className="block text-sm font-medium text-gray-700">Пароль</label><input type="password" value={msPassword} onChange={e => { setMsPassword(e.target.value); setMsIsConnected(null); }} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"/></div>
-                                <div className="flex items-center gap-2 mt-2"><input type="checkbox" id="useProxy" checked={msUseProxy} onChange={e => setMsUseProxy(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded"/><label htmlFor="useProxy" className="text-xs text-gray-500">Использовать CORS-прокси</label></div>
-                            </div>
-                        </div>
-                        <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка полей</h4>
-                            <div className="space-y-1 grid grid-cols-2 gap-x-4">{msSourceFields.map(f => (<div key={f.key} className="flex items-center"><input type="checkbox" checked={msFields[f.key as keyof typeof msFields]} onChange={e => setMsFields(prev => ({...prev, [f.key]: e.target.checked}))} className="h-3.5 w-3.5 text-indigo-600 border-gray-300 rounded"/><label className="ml-2 text-[11px] text-gray-600 truncate">{f.label}</label></div>))}</div>
-                        </div>
-                    </div>
-
-                    {msError && <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200"><b>Ошибка:</b> {msError}</div>}
-
-                    {msData.length > 0 && (
-                        <div className="bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col">
-                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center flex-wrap gap-2">
-                                <span className="font-semibold text-gray-700 text-sm">Товаров в МойСклад: {msData.length}</span>
-                                {selectedMsIds.size > 0 && (
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={handleAddSelectedToCatalog} disabled={msLoading} className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm disabled:opacity-50">Синхронизировать ({selectedMsIds.size})</button>
-                                        <button onClick={handleAddAsNew} disabled={msLoading} className="bg-green-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm disabled:opacity-50">Добавить как новые</button>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="overflow-x-auto max-h-[600px] border-t">
-                                <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
-                                    <thead className="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 border-b">
-                                        <tr className="bg-indigo-50/50">
-                                            <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th><th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
-                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (<th key={`map-${f.key}`} className="px-2 py-2 border-r bg-indigo-50"><select value={msMapping[f.key] || ''} onChange={(e) => setMsMapping(prev => ({...prev, [f.key]: e.target.value}))} className="w-full bg-white border border-indigo-200 rounded text-[9px] px-1 py-0.5 font-bold text-indigo-700">{targetFields.map(tf => (<option key={tf.key} value={tf.key}>{tf.label}</option>))}</select></th>))}
-                                            <th className="bg-indigo-50"></th>
-                                        </tr>
-                                        <tr>
-                                            <th className="px-2 py-3 w-8 border-r text-center"><input type="checkbox" checked={msData.length > 0 && selectedMsIds.size === msData.length} onChange={handleMsToggleAll} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/></th>
-                                            <th className="px-2 py-3 w-8 border-r text-center"><LockClosedIcon className="w-3 h-3 mx-auto text-indigo-400" /></th>
-                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (<th key={f.key} className="px-2 py-3 border-r font-bold truncate">{f.label}</th>))}
-                                            <th className="px-2 py-3 w-32 font-bold">Связь</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white">
-                                        {msData.map((item) => {
-                                            const isLocked = msLockedIds.has(item.id), linkedProduct = products.find(p => p.msId === item.id), authStr = btoa(`${msLogin}:${msPassword}`);
-                                            return (
-                                                <tr key={item.id} className={`border-b hover:bg-gray-50 ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}>
-                                                    <td className="px-2 py-2 border-r text-center"><input type="checkbox" checked={selectedMsIds.has(item.id)} onChange={() => handleMsToggleRow(item.id)} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/></td>
-                                                    <td className="px-2 py-2 border-r text-center"><button onClick={() => handleMsToggleLock(item.id)} className={`p-1 rounded-full ${isLocked ? 'bg-indigo-600 text-white' : 'text-gray-300'}`}>{isLocked ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}</button></td>
-                                                    {msFields.images && (<td className="px-2 py-2 border-r text-center">{item.images && item.images.length > 0 ? <MsThumbnail url={item.images[0]} auth={authStr} useProxy={msUseProxy} /> : '—'}</td>)}
-                                                    {msFields.name && <td className="px-2 py-2 border-r truncate">{item.name}</td>}
-                                                    {msFields.categories && <td className="px-2 py-2 border-r truncate">{item.categories}</td>}
-                                                    {msFields.buyPrice && <td className="px-2 py-2 border-r">{item.buyPrice} ₽</td>}
-                                                    {msFields.salePrice && <td className="px-2 py-2 border-r">{item.salePrice} ₽</td>}
-                                                    {msFields.article && <td className="px-2 py-2 border-r truncate">{item.article}</td>}
-                                                    {msFields.code && <td className="px-2 py-2 border-r truncate">{item.code}</td>}
-                                                    {msFields.description && <td className="px-2 py-2 border-r truncate">{item.description}</td>}
-                                                    {msFields.uom && <td className="px-2 py-2 border-r">{item.uom}</td>}
-                                                    {msFields.weight && <td className="px-2 py-2 border-r">{item.weight}</td>}
-                                                    <td className="px-2 py-2">{linkedProduct ? <span className="text-[9px] text-green-600 font-bold uppercase">Связан</span> : <span className="text-[9px] text-gray-300 font-bold uppercase">Нет</span>}</td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
+            
             {activeTab === 'products_master' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4"><h3 className="text-lg font-semibold text-gray-700">Все товары</h3><button onClick={() => setIsMasterFilterVisible(!isMasterFilterVisible)} className="p-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" /></svg></button></div>
@@ -827,7 +998,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     <ProductTable products={filteredTableProducts} allCategories={allCategories} onDeleteProduct={onDeleteProduct} onCycleStatus={onCycleStatus} onUpdatePortions={onUpdatePortions} onUpdatePrices={onUpdatePrices} onUpdatePriceTiers={onUpdateProductPriceTiers} onUpdateUspPrices={onUpdateUspPrices} onUpdateUspMarkupFlags={onUpdateProductUspMarkupFlags} onUpdateUnitValue={onUpdateUnitValue} onUpdateDetails={onUpdateDetails} onUpdateCategories={onUpdateCategories} onUpdateImages={onUpdateImages} onUpdateVisibility={onUpdateVisibility} uspMarkups={uspMarkups} setUspMarkups={setUspMarkups} onApplyMarkups={handleApplyMarkups} roles={roles} visibleColumns={visibleMasterColumns} onUpdateTierPortions={onUpdateTierPortions} onUpdateTierPriceOverrides={onUpdateTierPriceOverrides} selectedIds={selectedProductIds} onToggleRow={handleTableToggleRow} onToggleAll={handleTableToggleAll} isAllSelected={filteredTableProducts.length > 0 && filteredTableProducts.every(p => selectedProductIds.has(p.id))} isMasterView={true}/>
                 </div>
             )}
-            
+
             {activeTab === 'table' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4"><h3 className="text-lg font-semibold text-gray-700">Редактирование прайс-листа</h3><button onClick={() => setIsTableHelpVisible(!isTableHelpVisible)} className="text-gray-400 hover:text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg></button></div>
@@ -891,7 +1062,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700">Ед. изм.</label><select value={unit} onChange={e => setUnit(e.target.value as ProductUnit)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">{unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-700">Вид</label><select value={packaging} onChange={e => setPackaging(e.target.value as ProductPackaging)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">{packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}</select></div></div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700">Цена (₽)</label><input type="number" value={pricePerUnit} onChange={e => setPricePerUnit(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div><div><label className="block text-sm font-medium text-gray-700">Значение</label><input type="number" step="0.01" value={unitValue} onChange={e => setUnitValue(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div></div>
                             <div><label className="block text-sm font-medium text-gray-700">Категории</label><div className="mt-2 space-y-2 border p-3 rounded-md max-h-48 overflow-y-auto">{allPossibleCategories.map(cat => (<div key={cat} className="flex items-center"><input id={`cat-add-${cat}`} type="checkbox" checked={selectedCategories.has(cat)} onChange={() => handleCategoryToggle(cat)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`cat-add-${cat}`} className="ml-2 block text-sm text-gray-900">{cat}</label></div>))}</div><div className="mt-2 flex items-center gap-2"><input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="Новая..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg"/><button type="button" onClick={handleAddNewCategory} className="px-3 py-2 bg-gray-200 text-sm rounded-md hover:bg-gray-300">Добавить</button></div></div>
-                            <div><label className="block text-sm font-medium text-gray-700 mb-2">Изображения</label><div className="space-y-3">{uploadedImages.length > 0 && (<div className="flex space-x-2 overflow-x-auto pb-2 border p-2 rounded-md">{uploadedImages.map((url, index) => (<div key={index} className="relative flex-shrink-0 group"><img src={url} alt={`Upl ${index}`} className="h-20 w-20 object-cover rounded-lg border" /><button type="button" onClick={() => handleDeleteUploadedImage(index)} className="absolute top-1 right-1 bg-black bg-opacity-60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"><TrashIcon className="w-4 h-4" /></button></div>))}</div>)}{!isCameraActive && (<div className="flex flex-wrap gap-2"><input type="file" ref={imageFileInputRef} onChange={handleImageFileSelect} accept="image/*" multiple className="hidden" /><button type="button" onClick={handleAddImageFromFileClick} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600"><PlusIcon className="w-5 h-5" /><span>Файл</span></button><button type="button" onClick={handleOpenCamera} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700"><CameraIcon className="w-5 h-5" /><span>Снять</span></button></div>)}{isCameraActive && (<div className="flex flex-col items-center gap-2 p-2 border rounded-md bg-gray-50"><video ref={videoRef} autoPlay playsInline muted className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"></video><canvas ref={canvasRef} className="hidden"></canvas><div className="flex gap-2"><button type="button" onClick={handleTakePicture} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg">Снять</button><button type="button" onClick={stopCamera} className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg">Отмена</button></div></div>)}<div className="mt-2"><input type="text" value={imageUrls} onChange={e => setName(e.target.value)} placeholder="https://..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm"/></div></div></div>
+                            <div><label className="block text-sm font-medium text-gray-700 mb-2">Изображения</label><div className="space-y-3">{uploadedImages.length > 0 && (<div className="flex space-x-2 overflow-x-auto pb-2 border p-2 rounded-md">{uploadedImages.map((url, index) => (<div key={index} className="relative flex-shrink-0 group"><img src={url} alt={`Upl ${index}`} className="h-20 w-20 object-cover rounded-lg border" /><button type="button" onClick={() => handleDeleteUploadedImage(index)} className="absolute top-1 right-1 bg-black bg-opacity-60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"><TrashIcon className="w-4 h-4" /></button></div>))}</div>)}{!isCameraActive && (<div className="flex flex-wrap gap-2"><input type="file" ref={imageFileInputRef} onChange={handleImageFileSelect} accept="image/*" multiple className="hidden" /><button type="button" onClick={handleAddImageFromFileClick} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600"><PlusIcon className="w-5 h-5" /><span>Файл</span></button><button type="button" onClick={handleOpenCamera} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700"><CameraIcon className="w-5 h-5" /><span>Снять</span></button></div>)}{isCameraActive && (<div className="flex flex-col items-center gap-2 p-2 border rounded-md bg-gray-50"><video ref={videoRef} autoPlay playsInline muted className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"></video><canvas ref={canvasRef} className="hidden"></canvas><div className="flex gap-2"><button type="button" onClick={handleTakePicture} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg">Снять</button><button type="button" onClick={stopCamera} className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg">Отмена</button></div></div>)}<div className="mt-2"><input type="text" value={imageUrls} onChange={e => setImageUrls(e.target.value)} placeholder="https://..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm"/></div></div></div>
                             {packaging === 'головка' && (<div><span className="block text-sm font-medium text-gray-700">Опции</span><div className="mt-2 space-y-2"><div className="flex items-center"><input id="allowHalf" type="checkbox" checked={allowHalf} onChange={e => setAllowHalf(e.target.checked)} className="h-4 w-4 text-indigo-600"/><label htmlFor="allowHalf" className="ml-2 block text-sm text-gray-900">Половинки</label></div><div className="flex items-center"><input id="allowQuarter" type="checkbox" checked={allowQuarter} onChange={e => setAllowQuarter(e.target.checked)} className="h-4 w-4 text-indigo-600"/><label htmlFor="allowQuarter" className="ml-2 block text-sm text-gray-900">Четвертинки</label></div></div></div>)}
                             <div className="pt-4 flex justify-end"><button type="submit" disabled={isSubmitting} className="py-2 px-4 bg-indigo-600 text-white rounded-md disabled:bg-indigo-400">{isSubmitting ? '...' : 'Добавить'}</button></div>
                         </form>

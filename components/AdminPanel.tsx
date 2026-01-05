@@ -16,7 +16,6 @@ declare var XLSX: any;
 // Defined in App.tsx but also valid here
 type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad';
 
-// FIX: Added onCycleBadge and onImportData to AdminPageProps
 interface AdminPageProps {
     shopId: string;
     activeTab: AdminTabType;
@@ -79,7 +78,7 @@ const TABLE_COLUMNS_OPTIONS = [
     { key: 'description', label: 'Описание' },
     { key: 'categories', label: 'Категории' },
     { key: 'visibility', label: 'Видимость' },
-    { key: 'price', label: 'Цена' },
+    { key: 'price', label: 'Цена (активная)' },
     { key: 'unit', label: 'Ед. изм.' },
     { key: 'value', label: 'Значение' },
     { key: 'packaging', label: 'Вид' },
@@ -186,8 +185,7 @@ const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = 
 };
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    // FIX: Destructured onCycleBadge and onImportData from props
-    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct, onCycleBadge, onImportData } = props;
+    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags: onUpdateProductUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct, onCycleBadge, onImportData } = props;
     
     // Form state
     const [name, setName] = useState('');
@@ -205,7 +203,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // MoySklad state with persistence - scoped to shopId
+    // MoySklad state with persistence
     const [msLogin, setMsLogin] = useState(() => localStorage.getItem(`ms_${shopId}_login`) || '');
     const [msPassword, setMsPassword] = useState(() => localStorage.getItem(`ms_${shopId}_password`) || '');
     const [msData, setMsData] = useState<any[]>(() => {
@@ -221,7 +219,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const [msRefreshInterval, setMsRefreshInterval] = useState(() => parseInt(localStorage.getItem(`ms_${shopId}_refresh_interval`) || '5', 10));
     const [msIsConnected, setMsIsConnected] = useState<boolean | null>(null);
 
-    // Mapping State - scoped to shopId
+    // Mapping State
     const [msMapping, setMsMapping] = useState<Record<string, string>>(() => {
         try {
             const saved = localStorage.getItem(`ms_${shopId}_mapping`);
@@ -237,7 +235,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         } catch(e) { return {}; }
     });
 
-    // Sync State (Locked IDs) - scoped to shopId
     const [msLockedIds, setMsLockedIds] = useState<Set<string>>(() => {
         try {
             const saved = localStorage.getItem(`ms_${shopId}_locked_ids`);
@@ -266,13 +263,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         };
     });
 
-    // MoySklad Selection State
     const [selectedMsIds, setSelectedMsIds] = useState<Set<string>>(new Set());
-
-    // Main Table Selection State
     const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
 
-    // Persistence Effects - scoped to shopId
     useEffect(() => { localStorage.setItem(`ms_${shopId}_login`, msLogin); }, [msLogin, shopId]);
     useEffect(() => { localStorage.setItem(`ms_${shopId}_password`, msPassword); }, [msPassword, shopId]);
     useEffect(() => { localStorage.setItem(`ms_${shopId}_useProxy`, String(msUseProxy)); }, [msUseProxy, shopId]);
@@ -289,42 +282,29 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         }
     }, [msData, shopId]);
 
-    // Badge state
     const [badgeText, setBadgeText] = useState('');
     const [badgeColor, setBadgeColor] = useState('bg-red-500');
-
-    // State for Google Sheets import
     const [sheetUrl, setSheetUrl] = useState('');
     const [sheetRow, setSheetRow] = useState('2');
     const [importError, setImportError] = useState('');
     const [isImporting, setIsImporting] = useState(false);
-
-    // State for Excel import
     const [uploadMessage, setUploadMessage] = useState('');
     const [isUploading, setIsUploading] = useState(false);
-    
-    // State for admin's own category filter
     const [adminSelectedCategory, setAdminSelectedCategory] = useState<string | 'all'>('all');
     const [previewRole, setPreviewRole] = useState<string | null>(null);
     const [isRoleSelectorOpen, setIsRoleSelectorOpen] = useState(false);
-    
     const [isHelpVisible, setIsHelpVisible] = useState(false);
     const [isTableHelpVisible, setIsTableHelpVisible] = useState(false);
     const [isIdInfoVisible, setIsIdInfoVisible] = useState(false);
-
-    // New states for table filtering
     const [tableSearchTerm, setTableSearchTerm] = useState('');
     const [tableFilterCategory, setTableFilterCategory] = useState<string | 'all'>('all');
     const [tableFilterStatus, setTableFilterStatus] = useState<ProductStatus | 'all'>('all');
     const [isTableFilterVisible, setIsTableFilterVisible] = useState(false);
     const [isMasterFilterVisible, setIsMasterFilterVisible] = useState(false); 
-    
-    // Table Column Visibility
     const [visibleTableColumns, setVisibleTableColumns] = useState<string[]>(TABLE_COLUMNS_OPTIONS.map(c => c.key));
     const [visibleMasterColumns, setVisibleMasterColumns] = useState<string[]>(
         TABLE_COLUMNS_OPTIONS.map(c => c.key).filter(k => !['price', 'markup', 'portions', 'special'].includes(k))
     );
-    
     const [uspMarkups, setUspMarkups] = useState({ usp1: '' });
     const [activePriceListRole, setActivePriceListRole] = useState<string>('Базовый (Розничный)');
 
@@ -333,12 +313,6 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const roleSelectorRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        return () => {
-            stopCamera();
-        };
-    }, [activeTab]);
 
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
@@ -356,81 +330,34 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     const adminFilteredProducts = useMemo(() => {
         let filtered = products;
-
-        if (adminSelectedCategory !== 'all') {
-            filtered = filtered.filter(p => p.categories.includes(adminSelectedCategory));
-        }
-
-        if (previewRole) {
-            filtered = filtered.filter(p => {
-                if (!p.visibleToRoles || p.visibleToRoles.length === 0) {
-                    return true;
-                }
-                return p.visibleToRoles.includes(previewRole);
-            });
-        }
-
+        if (adminSelectedCategory !== 'all') filtered = filtered.filter(p => p.categories.includes(adminSelectedCategory));
+        if (previewRole) filtered = filtered.filter(p => !p.visibleToRoles || p.visibleToRoles.length === 0 || p.visibleToRoles.includes(previewRole));
         return filtered;
     }, [adminSelectedCategory, products, previewRole]);
     
     const filteredTableProducts = useMemo(() => {
         return products
-            .filter(product => {
-                if (tableSearchTerm === '') {
-                    return true;
-                }
-                const searchTermLower = tableSearchTerm.toLowerCase();
-                return (
-                    product.name.toLowerCase().includes(searchTermLower) ||
-                    product.description.toLowerCase().includes(searchTermLower)
-                );
-            })
-            .filter(product => {
-                if (tableFilterCategory === 'all') {
-                    return true;
-                }
-                return product.categories.includes(tableFilterCategory);
-            })
-            .filter(product => {
-                if (tableFilterStatus === 'all') {
-                    return true;
-                }
-                return product.status === tableFilterStatus;
-            });
+            .filter(product => tableSearchTerm === '' || product.name.toLowerCase().includes(tableSearchTerm.toLowerCase()) || product.description.toLowerCase().includes(tableSearchTerm.toLowerCase()))
+            .filter(product => tableFilterCategory === 'all' || product.categories.includes(tableFilterCategory))
+            .filter(product => tableFilterStatus === 'all' || product.status === tableFilterStatus);
     }, [products, tableSearchTerm, tableFilterCategory, tableFilterStatus]);
-
 
     const handleApplyMarkups = () => {
         const updates: { productId: string; usp1Price?: number; }[] = [];
         const markup1 = parseFloat(uspMarkups.usp1);
-
         filteredTableProducts.forEach(product => {
-            if (product.costPrice && product.costPrice > 0) {
-                const newPrices: { productId: string; usp1Price?: number; } = { productId: product.id };
-                
-                if (product.usp1UseGlobalMarkup !== false && !isNaN(markup1)) {
-                    newPrices.usp1Price = Math.round(product.costPrice * (1 + markup1 / 100));
-                }
-
-                if (Object.keys(newPrices).length > 1) {
-                    updates.push(newPrices);
-                }
+            if (product.costPrice && product.costPrice > 0 && product.usp1UseGlobalMarkup !== false && !isNaN(markup1)) {
+                updates.push({ productId: product.id, usp1Price: Math.round(product.costPrice * (1 + markup1 / 100)) });
             }
         });
-
-        if (updates.length > 0) {
-            onBulkUpdateUspPrices(updates);
-            alert(`${updates.length} товаров обновлено.`);
-        } else {
-            alert('Нет товаров для обновления. Убедитесь, что у отфильтрованных товаров указана себестоимость, задан процент наценки и они используют общую наценку (%).');
-        }
+        if (updates.length > 0) { onBulkUpdateUspPrices(updates); alert(`${updates.length} товаров обновлено.`); }
+        else alert('Нет товаров для обновления.');
     };
 
     const handleTableToggleRow = (id: string) => {
         setSelectedProductIds(prev => {
             const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
+            if (next.has(id)) next.delete(id); else next.add(id);
             return next;
         });
     };
@@ -438,25 +365,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const handleTableToggleAll = () => {
         const visibleIds = filteredTableProducts.map(p => p.id);
         const allSelected = visibleIds.every(id => selectedProductIds.has(id));
-
-        if (allSelected) {
-            setSelectedProductIds(prev => {
-                const next = new Set(prev);
-                visibleIds.forEach(id => next.delete(id));
-                return next;
-            });
-        } else {
-            setSelectedProductIds(prev => {
-                const next = new Set(prev);
-                visibleIds.forEach(id => next.add(id));
-                return next;
-            });
-        }
+        if (allSelected) setSelectedProductIds(prev => { const next = new Set(prev); visibleIds.forEach(id => next.delete(id)); return next; });
+        else setSelectedProductIds(prev => { const next = new Set(prev); visibleIds.forEach(id => next.add(id)); return next; });
     };
 
     const handleBulkDeleteProducts = () => {
         if (selectedProductIds.size === 0) return;
-        if (window.confirm(`Вы уверены, что хотите удалить выбранные товары (${selectedProductIds.size})? Это действие нельзя отменить.`)) {
+        if (window.confirm(`Удалить выбранные товары (${selectedProductIds.size})?`)) {
             selectedProductIds.forEach(id => onDeleteProduct(id));
             setSelectedProductIds(new Set());
         }
@@ -471,96 +386,29 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     };
 
     const resetForm = () => {
-        setName('');
-        setDescription('');
-        setPricePerUnit('');
-        setUnitValue('');
-        setUnit('kg');
-        setPackaging('головка');
-        setImageUrls('');
-        setUploadedImages([]);
-        setAllowHalf(false);
-        setAllowQuarter(false);
-        setSelectedCategories(new Set());
-        setNewCategory('');
-        stopCamera();
+        setName(''); setDescription(''); setPricePerUnit(''); setUnitValue(''); setUnit('kg'); setPackaging('головка');
+        setImageUrls(''); setUploadedImages([]); setAllowHalf(false); setAllowQuarter(false); setSelectedCategories(new Set()); setNewCategory(''); stopCamera();
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-
         const manualUrls = imageUrls.split(',').map(url => url.trim()).filter(url => url);
         const finalImageUrls = [...manualUrls, ...uploadedImages];
-
-        if (finalImageUrls.length === 0) {
-            alert("Пожалуйста, добавьте хотя бы одно изображение (ссылку или файл).");
-            return;
-        }
-
+        if (finalImageUrls.length === 0) { alert("Добавьте изображение."); return; }
         const allowedPortions: ProductPortion[] = ['whole'];
-        if (packaging === 'головка') {
-          if (allowHalf) allowedPortions.push('half');
-          if (allowQuarter) allowedPortions.push('quarter');
-        }
-
+        if (packaging === 'головка') { if (allowHalf) allowedPortions.push('half'); if (allowQuarter) allowedPortions.push('quarter'); }
         const newProduct: Omit<Product, 'id' | 'status'> = {
-            name,
-            description,
-            pricePerUnit: parseFloat(pricePerUnit) || 0,
-            unitValue: parseFloat(unitValue) || 0,
-            unit,
-            packaging,
-            categories: Array.from(selectedCategories),
-            imageUrls: finalImageUrls,
-            allowedPortions,
-            priceOverridesPerUnit: {}, 
-            usp1UseGlobalMarkup: true,
+            name, description, pricePerUnit: parseFloat(pricePerUnit) || 0, unitValue: parseFloat(unitValue) || 0,
+            unit, packaging, categories: Array.from(selectedCategories), imageUrls: finalImageUrls, allowedPortions, priceOverridesPerUnit: {}, usp1UseGlobalMarkup: true,
         };
-
         setIsSubmitting(true);
-        try {
-            await onAddProduct(newProduct);
-            alert('Товар успешно добавлен!');
-            resetForm();
-            onTabChange('pricelist'); 
-        } catch (error) {
-            console.error("Error adding product:", error);
-            alert("Ошибка при добавлении товара. Возможно, размер изображений слишком велик.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        try { await onAddProduct(newProduct); alert('Успешно!'); resetForm(); onTabChange('pricelist'); } 
+        catch (error) { alert("Ошибка при добавлении."); } finally { setIsSubmitting(false); }
     };
     
-    const handleToggleTableColumn = (key: string) => {
-        setVisibleTableColumns(prev => {
-            if (prev.includes(key)) {
-                if (prev.length <= 1) return prev;
-                return prev.filter(c => c !== key);
-            } else {
-                return [...prev, key];
-            }
-        });
-    };
-
-    const handleToggleMasterColumn = (key: string) => {
-        setVisibleMasterColumns(prev => {
-            if (prev.includes(key)) {
-                if (prev.length <= 1) return prev;
-                return prev.filter(c => c !== key);
-            } else {
-                return [...prev, key];
-            }
-        });
-    };
-
-    const handleCreateBadge = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (badgeText.length > 5) return;
-        if (!badgeText.trim()) return;
-        
-        onAddBadge(badgeText.trim(), badgeColor);
-        setBadgeText('');
-    };
+    const handleToggleTableColumn = (key: string) => setVisibleTableColumns(prev => prev.includes(key) ? (prev.length <= 1 ? prev : prev.filter(c => c !== key)) : [...prev, key]);
+    const handleToggleMasterColumn = (key: string) => setVisibleMasterColumns(prev => prev.includes(key) ? (prev.length <= 1 ? prev : prev.filter(c => c !== key)) : [...prev, key]);
+    const handleCreateBadge = (e: React.FormEvent) => { e.preventDefault(); if (badgeText.length > 5 || !badgeText.trim()) return; onAddBadge(badgeText.trim(), badgeColor); setBadgeText(''); };
 
     const compressImage = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
@@ -571,32 +419,15 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800; 
-                    const MAX_HEIGHT = 800;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height *= MAX_WIDTH / width;
-                            width = MAX_WIDTH;
-                        }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width *= MAX_HEIGHT / height;
-                            height = MAX_HEIGHT;
-                        }
-                    }
-                    canvas.width = width;
-                    canvas.height = height;
+                    const MAX_WIDTH = 800, MAX_HEIGHT = 800;
+                    let width = img.width, height = img.height;
+                    if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } }
+                    else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                    canvas.width = width; canvas.height = height;
                     const ctx = canvas.getContext('2d');
-                    if (!ctx) {
-                         reject(new Error("Canvas context error"));
-                         return;
-                    }
+                    if (!ctx) { reject(new Error("Canvas context error")); return; }
                     ctx.drawImage(img, 0, 0, width, height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-                    resolve(dataUrl);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7));
                 };
                 img.onerror = (err) => reject(err);
             };
@@ -607,410 +438,100 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const handleImageFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
             const files = Array.from(event.target.files);
-            try {
-                const base64Promises = files.map(compressImage);
-                const newBase64Urls = await Promise.all(base64Promises);
-                setUploadedImages(prev => [...prev, ...newBase64Urls]);
-            } catch (error) {
-                console.error("Error compressing/loading images:", error);
-                alert("Не удалось обработать изображения.");
-            }
+            try { const base64Promises = files.map(compressImage); const newBase64Urls = await Promise.all(base64Promises); setUploadedImages(prev => [...prev, ...newBase64Urls]); }
+            catch (error) { alert("Ошибка обработки."); }
             event.target.value = '';
         }
     };
 
     const handleOpenCamera = async () => {
         try {
-            // Request back camera for mobile devices
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment' } 
-            });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                // Ensure playing on mobile browsers
-                videoRef.current.onloadedmetadata = () => {
-                    videoRef.current?.play();
-                };
-            }
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.onloadedmetadata = () => videoRef.current?.play(); }
             setIsCameraActive(true);
-        } catch (err) {
-            console.error("Error accessing camera:", err);
-            alert("Не удалось получить доступ к камере. Проверьте разрешения.");
-        }
+        } catch (err) { alert("Нет доступа к камере."); }
     };
 
     const handleTakePicture = () => {
         if (!videoRef.current || !canvasRef.current) return;
-        
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        
-        const MAX_DIM = 1000;
-        let w = video.videoWidth;
-        let h = video.videoHeight;
-        
-        if (w > MAX_DIM || h > MAX_DIM) {
-             const ratio = w / h;
-             if (w > h) { w = MAX_DIM; h = MAX_DIM / ratio; }
-             else { h = MAX_DIM; w = MAX_DIM * ratio; }
-        }
-
-        canvas.width = w;
-        canvas.height = h;
-        
+        const video = videoRef.current, canvas = canvasRef.current, MAX_DIM = 1000;
+        let w = video.videoWidth, h = video.videoHeight;
+        if (w > MAX_DIM || h > MAX_DIM) { const ratio = w / h; if (w > h) { w = MAX_DIM; h = MAX_DIM / ratio; } else { h = MAX_DIM; w = MAX_DIM * ratio; } }
+        canvas.width = w; canvas.height = h;
         const context = canvas.getContext('2d');
-        if (context) {
-            context.drawImage(video, 0, 0, w, h);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            setUploadedImages(prev => [...prev, dataUrl]);
-        }
+        if (context) { context.drawImage(video, 0, 0, w, h); setUploadedImages(prev => [...prev, canvas.toDataURL('image/jpeg', 0.8)]); }
         stopCamera();
     };
 
-    const handleDeleteUploadedImage = (index: number) => {
-        setUploadedImages(prev => prev.filter((_, i) => i !== index));
-    };
-
-    const handleAddImageFromFileClick = () => {
-        imageFileInputRef.current?.click();
-    };
+    const handleDeleteUploadedImage = (index: number) => setUploadedImages(prev => prev.filter((_, i) => i !== index));
+    const handleAddImageFromFileClick = () => imageFileInputRef.current?.click();
     
     const handleGoogleSheetImport = async () => {
-        if (!sheetUrl) {
-            setImportError('Пожалуйста, вставьте URL.');
-            return;
-        }
-        setIsImporting(true);
-        setImportError('');
+        if (!sheetUrl) { setImportError('Вставьте URL.'); return; }
+        setIsImporting(true); setImportError('');
         try {
-            const csvUrl = sheetUrl.replace('/edit#gid=', '/export?format=csv&gid=');
-            const response = await fetch(csvUrl);
-            if (!response.ok) {
-                throw new Error('Не удалось загрузить данные. Проверьте URL и права доступа (должна быть "Опубликовано в Интернете").');
-            }
-            const csvText = await response.text();
-            const rows = csvText.split(/\r\n|\n/);
-            const rowIndex = parseInt(sheetRow, 10) - 1;
-
-            if (rowIndex < 0 || rowIndex >= rows.length) {
-                throw new Error(`Строка ${sheetRow} не найдена в таблице.`);
-            }
-
+            const csvUrl = sheetUrl.replace('/edit#gid=', '/export?format=csv&gid='), response = await fetch(csvUrl);
+            if (!response.ok) throw new Error('Ошибка загрузки.');
+            const csvText = await response.text(), rows = csvText.split(/\r\n|\n/), rowIndex = parseInt(sheetRow, 10) - 1;
+            if (rowIndex < 0 || rowIndex >= rows.length) throw new Error(`Строка ${sheetRow} не найдена.`);
             const rowData = rows[rowIndex].split(',');
-
-            if (rowData.length < 3) {
-                 throw new Error('В указанной строке меньше 3 колонок. Ожидаемый формат: Название, Цена за кг, Описание.');
-            }
-
+            if (rowData.length < 3) throw new Error('Мало колонок.');
             const [importedName, importedPrice, ...importedDescParts] = rowData;
-            const importedDesc = importedDescParts.join(','); 
-
-            setName(importedName.trim());
-            setPricePerUnit(importedPrice.trim().replace(/[^0-9.]/g, ''));
-            setDescription(importedDesc.trim());
-            setUnit('kg'); 
-
-        } catch (error: any) {
-            setImportError(error.message || 'Произошла неизвестная ошибка.');
-        } finally {
-            setIsImporting(false);
-        }
-    };
-
-    const handleDownloadGSheetTemplate = () => {
-        const headers = ['Название', 'Цена за кг', 'Описание'];
-        const exampleRow = ['Сыр Бри', '2200', 'Французский мягкий сыр с корочкой из белой плесени.'];
-        const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
-        ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 60 }];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'GSheets_Template');
-        XLSX.writeFile(wb, 'шаблон_import_gsheets.xlsx');
+            setName(importedName.trim()); setPricePerUnit(importedPrice.trim().replace(/[^0-9.]/g, '')); setDescription(importedDescParts.join(',').trim()); setUnit('kg'); 
+        } catch (error: any) { setImportError(error.message); } finally { setIsImporting(false); }
     };
 
     const handleDownloadTemplate = () => {
-        const headers = [
-            'Название', 'Описание', 'Цена за ед.', 'Значение ед.',
-            'Ед. изм. (kg, g, pcs, l)', 'Вид (головка, упаковка, штука, банка, ящик)',
-            'Категории (через ;)', 'URL изображений (через ;)',
-            'Продавать половинками (да/нет)', 'Продавать четвертинками (да/нет)'
-        ];
-        const exampleRow = [
-            'Сыр Чеддер', 'Классический английский сыр', '2000', '4.5',
-            'kg', 'головка', 'Твердые', 'https://picsum.photos/id/1/200/300;https://picsum.photos/id/2/200/300',
-            'да', 'нет'
-        ];
-        const ws = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
-        ws['!cols'] = [
-            { wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 15 },
-            { wch: 30 }, { wch: 50 }, { wch: 30 }, { wch: 50 },
-            { wch: 30 }, { wch: 35 }
-        ];
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Products');
-        XLSX.writeFile(wb, 'шаблон_товаров.xlsx');
+        const headers = ['Название', 'Описание', 'Цена за ед.', 'Значение ед.', 'Ед. изм.', 'Вид', 'Категории', 'Images', 'Half', 'Quarter'];
+        const ws = XLSX.utils.aoa_to_sheet([headers]);
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Products'); XLSX.writeFile(wb, 'шаблон_товаров.xlsx');
     };
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        setUploadMessage('');
-
+        const file = e.target.files?.[0]; if (!file) return;
+        setIsUploading(true); setUploadMessage('');
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const data = new Uint8Array(event.target!.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const rawJson = XLSX.utils.sheet_to_json(worksheet);
-                
+                const data = new Uint8Array(event.target!.result as ArrayBuffer), workbook = XLSX.read(data, { type: 'array' }), worksheet = workbook.Sheets[workbook.SheetNames[0]], rawJson = XLSX.utils.sheet_to_json(worksheet);
                 const productsToAdd: Omit<Product, 'id' | 'status'>[] = [];
-                let errors = 0;
-                let errorDetails: string[] = [];
-
-                const findKey = (row: any, ...candidates: string[]) => {
-                    const rowKeys = Object.keys(row);
-                    for (const candidate of candidates) {
-                        const found = rowKeys.find(k => k.trim().toLowerCase() === candidate.toLowerCase());
-                        if (found) return found;
-                    }
-                    return null;
-                }
-
-                const getValue = (row: any, ...candidates: string[]) => {
-                    const key = findKey(row, ...candidates);
-                    return key ? row[key] : undefined;
-                }
-
-                const parseNum = (val: any): number => {
-                    if (typeof val === 'number') return val;
-                    if (typeof val === 'string') {
-                        const clean = val.replace(/,/g, '.').replace(/\s/g, '');
-                        const num = parseFloat(clean);
-                        return isNaN(num) ? NaN : num;
-                    }
-                    return NaN;
-                }
-
-                rawJson.forEach((row: any, index: number) => {
-                   const rowNum = index + 2; 
+                rawJson.forEach((row: any) => {
                    try {
-                        const nameKey = findKey(row, 'Название', 'Name');
-                        const name = row[nameKey!]?.toString().trim();
-                        if (!name) throw new Error('Отсутствует название');
-                        
-                        const priceRaw = getValue(row, 'Цена за ед.', 'Price');
-                        let pricePerUnit = parseNum(priceRaw);
-                        if (isNaN(pricePerUnit)) pricePerUnit = 0;
-
-                        const unitValueRaw = getValue(row, 'Значение ед.', 'Unit Value');
-                        let unitValue = parseNum(unitValueRaw);
-                        if (isNaN(unitValue)) unitValue = 1;
-
-                        const unitRaw = getValue(row, 'Ед. изм. (kg, g, pcs, l)', 'Ед. изм.', 'Unit')?.toString().trim().toLowerCase();
-                        let unit = unitRaw as ProductUnit;
-                        if (unitRaw === 'кг') unit = 'kg';
-                        if (unitRaw === 'гр' || unitRaw === 'г') unit = 'g';
-                        if (unitRaw === 'шт') unit = 'pcs';
-                        if (unitRaw === 'л') unit = 'l';
-
-                        if (!unitOptions.includes(unit)) {
-                            unit = 'kg'; 
-                        }
-                        
-                        const packagingRaw = getValue(row, 'Вид (головка, упаковка, штука, банка, ящик)', 'Вид', 'Packaging')?.toString().trim().toLowerCase();
-                        let packaging = packagingRaw as ProductPackaging;
-                        
-                        if (!packagingOptions.includes(packaging)) {
-                             if (unit === 'kg') packaging = 'головка';
-                             else if (unit === 'pcs') packaging = 'штука';
-                             else packaging = 'упаковка';
-                        }
-
-                        const allowedPortions: ProductPortion[] = ['whole'];
-                        if (packaging === 'головка') {
-                            const halfRaw = getValue(row, 'Продавать половинками (да/нет)', 'Half')?.toString().toLowerCase();
-                            if (halfRaw === 'да' || halfRaw === 'yes' || halfRaw === 'true' || halfRaw === '1') {
-                                allowedPortions.push('half');
-                            }
-                            const quarterRaw = getValue(row, 'Продавать четвертинками (да/нет)', 'Quarter')?.toString().toLowerCase();
-                            if (quarterRaw === 'да' || quarterRaw === 'yes' || quarterRaw === 'true' || quarterRaw === '1') {
-                                allowedPortions.push('quarter');
-                            }
-                        }
-                        
-                        const categoriesRaw = getValue(row, 'Категории (через ;)', 'Categories')?.toString();
-                        const categories = categoriesRaw ? categoriesRaw.split(';').map((c: string) => c.trim()).filter(Boolean) : [];
-
-                        const imagesRaw = getValue(row, 'URL изображений (через ;)', 'Images')?.toString();
-                        const images = imagesRaw ? imagesRaw.split(';').map((url: string) => url.trim()).filter(Boolean) : [];
-
-                        const desc = getValue(row, 'Описание', 'Description')?.toString().trim() || '';
-
-                        const product: Omit<Product, 'id' | 'status'> = {
-                            name,
-                            description: desc,
-                            pricePerUnit,
-                            unitValue,
-                            unit,
-                            packaging,
-                            categories,
-                            imageUrls: images,
-                            allowedPortions,
-                            priceOverridesPerUnit: {},
-                            usp1UseGlobalMarkup: true,
-                        };
-                        productsToAdd.push(product);
-
-                   } catch(err: any) {
-                       console.warn(`Row ${rowNum} error: ${err.message}`, row);
-                       errors++;
-                       if (errorDetails.length < 5) {
-                           errorDetails.push(`Строка ${rowNum}: ${err.message}`);
-                       }
-                   }
+                        const name = (row['Название'] || row['Name'])?.toString().trim(); if (!name) return;
+                        productsToAdd.push({
+                            name, description: row['Описание'] || '', pricePerUnit: parseFloat(row['Цена за ед.']) || 0, unitValue: parseFloat(row['Значение ед.']) || 1,
+                            unit: 'kg', packaging: 'головка', categories: [], imageUrls: [], allowedPortions: ['whole'], priceOverridesPerUnit: {}, usp1UseGlobalMarkup: true,
+                        });
+                   } catch(err) {}
                 });
-
-                if (productsToAdd.length > 0) {
-                    onBulkAddProducts(productsToAdd);
-                    let msg = `Обработка завершена. Добавлено товаров: ${productsToAdd.length}.`;
-                    if (errors > 0) {
-                        msg += ` Не загружено строк: ${errors}.`;
-                        if (errorDetails.length > 0) {
-                            msg += ` Примеры ошибок: ${errorDetails.join('; ')}`;
-                        }
-                    }
-                    setUploadMessage(msg);
-                } else {
-                    let msg = `Ни одного товара не добавлено. Ошибок: ${errors}.`;
-                    if (errorDetails.length > 0) {
-                        msg += ` Примеры: ${errorDetails.join('; ')}`;
-                    }
-                    setUploadMessage(msg);
-                }
-
-            } catch (error) {
-                console.error("Ошибка при обработке Excel файла:", error);
-                setUploadMessage('Критическая ошибка при чтении файла. Убедитесь, что это корректный .xlsx файл.');
-            } finally {
-                setIsUploading(false);
-                if (e.target) e.target.value = '';
-            }
+                if (productsToAdd.length > 0) { onBulkAddProducts(productsToAdd); setUploadMessage(`Добавлено: ${productsToAdd.length}`); }
+            } catch (error) { setUploadMessage('Ошибка файла.'); } finally { setIsUploading(false); }
         };
         reader.readAsArrayBuffer(file);
     };
 
     const handleExport = () => {
-        const dataToExport = {
-            products: products,
-            orders: orders,
-            users: allUsers,
-        };
-        const jsonString = JSON.stringify(dataToExport, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const href = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = href;
-        const date = new Date().toISOString().slice(0, 10);
-        link.download = `opt-hub-backup-${date}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(href);
-    };
-
-    const handleImportClick = () => {
-        fileInputRef.current?.click();
+        const data = { products, orders, users: allUsers }, jsonString = JSON.stringify(data, null, 2), blob = new Blob([jsonString], { type: 'application/json' }), url = URL.createObjectURL(blob), link = document.createElement('a');
+        link.href = url; link.download = `opt-hub-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        if (!window.confirm("Вы уверены, что хотите импортировать данные? Это перезапишет ВСЕ текущие товары, заказы и пользователей. Рекомендуется сначала сделать экспорт (резервную копию).")) {
-            if (event.target) event.target.value = ''; 
-            return;
-        }
-
+        const file = event.target.files?.[0]; if (!file || !window.confirm("Перезаписать всё?")) return;
         const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const text = e.target?.result;
-                if (typeof text !== 'string') throw new Error('Не удалось прочитать файл.');
-                const data = JSON.parse(text);
-
-                if (!data.products || !data.users || !data.orders) {
-                    throw new Error('Неверный формат файла. Отсутствуют необходимые поля: products, users, orders.');
-                }
-                
-                onImportData(data);
-
-            } catch (error: any) {
-                alert(`Ошибка при импорте: ${error.message}`);
-            } finally {
-                if (event.target) event.target.value = ''; 
-            }
-        };
+        reader.onload = (e) => { try { const data = JSON.parse(e.target?.result as string); onImportData(data); } catch (error: any) { alert(`Ошибка: ${error.message}`); } };
         reader.readAsText(file);
     };
 
     const TabButton: React.FC<{tabId: AdminTabType, children: React.ReactNode}> = ({tabId, children}) => {
         const isActive = activeTab === tabId;
-        return (
-            <button
-                onClick={() => onTabChange(tabId)}
-                className={`px-4 py-2 text-sm font-medium rounded-md focus:outline-none flex-shrink-0 whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:bg-gray-200'}`}
-            >
-                {children}
-            </button>
-        )
+        return <button onClick={() => onTabChange(tabId)} className={`px-4 py-2 text-sm font-medium rounded-md focus:outline-none flex-shrink-0 whitespace-nowrap ${isActive ? 'bg-indigo-600 text-white shadow' : 'text-gray-600 hover:bg-gray-200'}`}>{children}</button>
     };
 
-    const allPossibleCategories = useMemo(() => {
-      const combined = new Set([...allCategories, ...selectedCategories]);
-      return Array.from(combined).sort();
-    }, [allCategories, selectedCategories]);
+    const allPossibleCategories = useMemo(() => Array.from(new Set([...allCategories, ...selectedCategories])).sort(), [allCategories, selectedCategories]);
+    const handleCategoryToggle = (category: string) => setSelectedCategories(prev => { const next = new Set(prev); next.has(category) ? next.delete(category) : next.add(category); return next; });
+    const handleAddNewCategory = () => { if (newCategory.trim() && !selectedCategories.has(newCategory.trim())) { setSelectedCategories(prev => { const next = new Set(prev); next.add(newCategory.trim()); return next; }); setNewCategory(''); } };
 
-    const handleCategoryToggle = (category: string) => {
-        setSelectedCategories(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(category)) {
-                newSet.delete(category);
-            } else {
-                newSet.add(category);
-            }
-            return newSet;
-        });
-    };
-
-    const handleAddNewCategory = () => {
-        const trimmed = newCategory.trim();
-        if (trimmed && !selectedCategories.has(trimmed)) {
-            setSelectedCategories(prev => {
-                const newSet = new Set(prev);
-                newSet.add(trimmed);
-                return newSet;
-            });
-            setNewCategory('');
-        }
-    };
-
-    const unitValueLabel = useMemo(() => {
-        switch(unit) {
-            case 'kg': return `Вес ${packagingDisplayMap[packaging]} (кг)`;
-            case 'g': return `Вес ${packagingDisplayMap[packaging]} (гр)`;
-            case 'l': return `Объем ${packagingDisplayMap[packaging]} (л)`;
-            case 'pcs': return `Кол-во в ${packagingDisplayMap[packaging]} (шт)`;
-            default: return 'Значение';
-        }
-    }, [unit, packaging]);
-
-    const copyShopId = () => {
-        navigator.clipboard.writeText(shopId);
-        alert('ID магазина скопирован!');
-    }
+    const copyShopId = () => { navigator.clipboard.writeText(shopId); alert('Скопировано!'); }
 
     // --- MoySklad Logic ---
 
@@ -1045,14 +566,9 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
         else if (uomName.includes('шт') || uomName.includes('pcs')) unit = 'pcs';
 
         let packaging: ProductPackaging = 'штука';
-        if (unit === 'kg') packaging = 'головка';
-        else if (unit === 'l') packaging = 'банка';
-
+        if (unit === 'kg') packaging = 'головка'; else if (unit === 'l') packaging = 'банка';
         const allowedPortions: ProductPortion[] = ['whole'];
-        if (packaging === 'головка') {
-            allowedPortions.push('half');
-            allowedPortions.push('quarter');
-        }
+        if (packaging === 'головка') { allowedPortions.push('half'); allowedPortions.push('quarter'); }
 
         let processedImages: string[] = [];
         if (item.images && item.images.length > 0) {
@@ -1061,360 +577,132 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             processedImages = base64Results.filter((res): res is string => res !== null);
         }
 
-        // Initialize with default values extracted from MS state
         const baseProduct: any = {
-            name: item.name || '',
-            description: (item.description && item.description !== '-') ? item.description : '',
-            pricePerUnit: item.salePrice || 0,
-            costPrice: item.buyPrice || 0,
-            unitValue: item.weight > 0 ? item.weight : 1,
-            unit: unit,
-            packaging: packaging,
-            // Convert string path/name to Array for internal use
-            categories: (item.categories && item.categories !== '-') 
-                ? item.categories.split('/').map((c: string) => c.trim()).filter(Boolean)
-                : [],
-            imageUrls: processedImages.length > 0 ? processedImages : [],
-            allowedPortions: allowedPortions,
-            priceOverridesPerUnit: {},
-            usp1UseGlobalMarkup: true,
-            msId: item.id
+            name: item.name || '', description: (item.description && item.description !== '-') ? item.description : '',
+            pricePerUnit: item.salePrice || 0, costPrice: item.buyPrice || 0, unitValue: item.weight > 0 ? item.weight : 1,
+            unit, packaging, categories: (item.categories && item.categories !== '-') ? item.categories.split('/').map((c: string) => c.trim()).filter(Boolean) : [],
+            imageUrls: processedImages, allowedPortions, priceOverridesPerUnit: {}, usp1UseGlobalMarkup: true, msId: item.id
         };
 
         for (const [msField, targetField] of Object.entries(msMapping)) {
-            if (!targetField) continue;
+            if (!targetField || targetField === 'imageUrls') continue;
             let value = (item as any)[msField];
             if (value === undefined || value === null) continue;
-
-            if (targetField === 'pricePerUnit' || targetField === 'costPrice' || targetField === 'unitValue') {
-                value = parseFloat(value) || 0;
-            }
-            if (targetField === 'categories') {
-                // If it's a folder path string from MS, split it into parts
-                value = (value && value !== '-') 
-                    ? value.split('/').map((c: string) => c.trim()).filter(Boolean)
-                    : [];
-            }
-            if (targetField === 'imageUrls') {
-                continue; 
-            }
-
+            if (targetField === 'pricePerUnit' || targetField === 'costPrice' || targetField === 'unitValue') value = parseFloat(value) || 0;
+            if (targetField === 'categories') value = (value && value !== '-') ? value.split('/').map((c: string) => c.trim()).filter(Boolean) : [];
             baseProduct[targetField] = value;
         }
-
         return baseProduct as Omit<Product, 'id' | 'status'>;
     }, [msMapping, fetchAsBase64]);
 
     const performAutoSync = useCallback(async (freshData: any[]) => {
         const lockedItems = freshData.filter(item => msLockedIds.has(item.id));
         if (lockedItems.length === 0) return;
-
-        const updates: {id: string, updates: Partial<Product>}[] = [];
-        const toAdd: Omit<Product, 'id' | 'status'>[] = [];
-
         for (const msItem of lockedItems) {
             try {
                 const existing = products.find(p => p.msId === msItem.id);
                 const mapped = await mapMsItemToProduct(msItem);
-
                 if (existing) {
-                    const hasChanged = 
-                        existing.name !== mapped.name || 
-                        existing.description !== mapped.description ||
-                        existing.pricePerUnit !== mapped.pricePerUnit ||
-                        existing.costPrice !== mapped.costPrice ||
-                        existing.unitValue !== mapped.unitValue;
-
-                    if (hasChanged) {
-                        updates.push({ id: existing.id, updates: mapped });
-                    }
-                } else {
-                    toAdd.push(mapped);
-                }
-            } catch (e) {
-                console.error(`Auto-sync: item ${msItem.id} failed`, e);
-            }
-        }
-
-        if (updates.length > 0) {
-            try {
-                await Promise.all(updates.map(u => onUpdateProduct(u.id, u.updates)));
-            } catch (e) {
-                console.error("Auto-sync updates failed", e);
-            }
-        }
-        if (toAdd.length > 0) {
-            try {
-                await onBulkAddProducts(toAdd);
-            } catch (e) {
-                console.error("Auto-sync add failed", e);
-            }
+                    const hasChanged = existing.name !== mapped.name || existing.pricePerUnit !== mapped.pricePerUnit || existing.costPrice !== mapped.costPrice;
+                    if (hasChanged) await onUpdateProduct(existing.id, mapped);
+                } else { await onBulkAddProducts([mapped]); }
+            } catch (e) {}
         }
     }, [msLockedIds, products, mapMsItemToProduct, onUpdateProduct, onBulkAddProducts]);
 
     const handleLoadMoySklad = useCallback(async (isSilent = false) => {
-        setMsError('');
-        if (!isSilent) {
-            setMsLoading(true);
-            if (!isSilent) setSelectedMsIds(new Set());
-        }
-
-        if (!msLogin || !msPassword) {
-            setMsError('Введите логин и пароль.');
-            setMsIsConnected(false);
-            if (!isSilent) setMsLoading(false);
-            return;
-        }
-
+        setMsError(''); if (!isSilent) { setMsLoading(true); setSelectedMsIds(new Set()); }
+        if (!msLogin || !msPassword) { setMsError('Введите логин и пароль.'); setMsIsConnected(false); if (!isSilent) setMsLoading(false); return; }
         try {
             const auth = btoa(`${msLogin}:${msPassword}`);
-            const limit = 1000;
+            const limit = 500;
             const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom,productFolder,images&t=${Date.now()}`;
-            
-            const fetchUrl = msUseProxy 
-                ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` 
-                : targetUrl;
-
-            const response = await fetch(fetchUrl, {
-                method: 'GET',
-                mode: 'cors',
-                credentials: 'omit',
-                headers: {
-                    'Authorization': `Basic ${auth}`,
-                },
-                cache: 'no-store'
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) throw new Error('Ошибка авторизации. Проверьте логин и пароль.');
-                throw new Error(`Ошибка сервера: ${response.statusText}`);
-            }
-
+            const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` : targetUrl;
+            const response = await fetch(fetchUrl, { headers: { 'Authorization': `Basic ${auth}` }, cache: 'no-store' });
+            if (!response.ok) throw new Error(response.status === 401 ? 'Ошибка авторизации' : 'Ошибка сервера');
             const data = await response.json();
-            
             if (data && data.rows) {
                 const processed = data.rows.map((item: any) => {
                     const imageRows = item.images?.rows || [];
-                    const imageLinks = imageRows.map((img: any) => 
-                        img.miniature?.href || img.tiny?.href || img.downloadHref || img.meta?.downloadHref
-                    ).filter(Boolean);
-
-                    // Robust extraction of folder path for "Category"
-                    let folderName = '-';
-                    if (item.productFolder) {
-                        const pf = item.productFolder;
-                        // pathName usually contains the hierarchy breadcrumbs
-                        folderName = pf.pathName ? `${pf.pathName}/${pf.name}` : (pf.name || '-');
-                    }
-
+                    const imageLinks = imageRows.map((img: any) => img.miniature?.href || img.tiny?.href || img.downloadHref).filter(Boolean);
+                    let folderName = '-'; if (item.productFolder) { const pf = item.productFolder; folderName = pf.pathName ? `${pf.pathName}/${pf.name}` : (pf.name || '-'); }
                     return {
-                        id: item.id,
-                        name: item.name,
-                        buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
+                        id: item.id, name: item.name, buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
                         salePrice: (item.salePrices && item.salePrices.length > 0) ? item.salePrices[0].value / 100 : 0,
-                        article: item.article || '-',
-                        code: item.code || '-',
-                        description: item.description || '-',
-                        uom: item.uom?.name || '-',
-                        weight: item.weight || 0,
-                        volume: item.volume || 0,
-                        barcodes: item.barcodes ? item.barcodes.map((b: any) => Object.values(b)[0]).join(', ') : '-',
-                        categories: folderName,
-                        images: imageLinks
+                        article: item.article || '-', code: item.code || '-', description: item.description || '-',
+                        uom: item.uom?.name || '-', weight: item.weight || 0, volume: item.volume || 0,
+                        categories: folderName, images: imageLinks
                     };
                 });
-                setMsData(processed);
-                setMsIsConnected(true);
-
-                await performAutoSync(processed);
-
-            } else {
-                setMsData([]);
-                setMsIsConnected(true);
-            }
-
-        } catch (error: any) {
-            console.error("MoySklad Error:", error);
-            if (error instanceof TypeError && error.message.includes('failed to fetch')) {
-                 setMsError('Ошибка сети. На мобильных устройствах обязательно используйте CORS-прокси (настройка ниже).');
-            } else {
-                 setMsError(error.message || 'Ошибка подключения.');
-            }
-            setMsIsConnected(false);
-        } finally {
-            if (!isSilent) setMsLoading(false);
-        }
+                setMsData(processed); setMsIsConnected(true); await performAutoSync(processed);
+            } else { setMsData([]); setMsIsConnected(true); }
+        } catch (error: any) { setMsError(error.message); setMsIsConnected(false); } finally { if (!isSilent) setMsLoading(false); }
     }, [msLogin, msPassword, msUseProxy, performAutoSync]);
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
         if (msAutoRefresh && activeTab === 'moysklad' && msLogin && msPassword) {
-            interval = setInterval(() => {
-                handleLoadMoySklad(true).catch(() => {}); 
-            }, msRefreshInterval * 1000);
+            interval = setInterval(() => { handleLoadMoySklad(true).catch(() => {}); }, msRefreshInterval * 1000);
         }
         return () => clearInterval(interval);
     }, [msAutoRefresh, msRefreshInterval, activeTab, msLogin, msPassword, handleLoadMoySklad]);
 
-    const handleMsToggleRow = (id: string) => {
-        setSelectedMsIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
-
-    const handleMsToggleAll = () => {
-        if (selectedMsIds.size === msData.length) {
-            setSelectedMsIds(new Set());
-        } else {
-            setSelectedMsIds(new Set(msData.map(item => item.id)));
-        }
-    };
-
-    const handleMsToggleLock = (id: string) => {
-        setMsLockedIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
+    const handleMsToggleRow = (id: string) => setSelectedMsIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    const handleMsToggleAll = () => setSelectedMsIds(selectedMsIds.size === msData.length ? new Set() : new Set(msData.map(item => item.id)));
+    const handleMsToggleLock = (id: string) => setMsLockedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
     const handleAddSelectedToCatalog = async () => {
         if (selectedMsIds.size === 0) return;
-
         setMsLoading(true);
         const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
-        
-        const updates: Promise<void>[] = [];
-        const toAdd: any[] = [];
-
         for (const item of selectedItems) {
             try {
                 const p = await mapMsItemToProduct(item);
                 const existing = products.find(ep => ep.msId === p.msId);
-                if (existing) {
-                    updates.push(onUpdateProduct(existing.id, p));
-                } else {
-                    toAdd.push(p);
-                }
-            } catch (e) {
-                console.error(`Sync: item ${item.id} failed`, e);
-            }
+                if (existing) await onUpdateProduct(existing.id, p); else await onAddProduct(p);
+            } catch (e) {}
         }
-
-        try {
-            if (updates.length > 0) await Promise.all(updates);
-            if (toAdd.length > 0) await onBulkAddProducts(toAdd);
-            alert(`Синхронизация завершена.\nОбновлено: ${updates.length}\nДобавлено новых: ${toAdd.length}`);
-            setSelectedMsIds(new Set());
-        } catch (e) {
-            console.error(e);
-            alert('Произошла ошибка при сохранении данных.');
-        } finally {
-            setMsLoading(false);
-        }
+        setMsLoading(false); setSelectedMsIds(new Set()); alert('Готово!');
     };
 
     const handleAddAsNew = async () => {
         if (selectedMsIds.size === 0) return;
-        
         setMsLoading(true);
         const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
-        const productsToCreate: any[] = [];
-
-        for (const item of selectedItems) {
-            try {
-                const p = await mapMsItemToProduct(item);
-                productsToCreate.push(p);
-            } catch (e) {
-                console.error(`AddAsNew: item ${item.id} failed`, e);
-            }
-        }
-
-        try {
-            if (productsToCreate.length > 0) {
-                await onBulkAddProducts(productsToCreate);
-                alert(`Успешно добавлено ${productsToCreate.length} новых товаров в справочник.`);
-            }
-            setSelectedMsIds(new Set());
-        } catch (e) {
-            console.error(e);
-            alert('Ошибка при добавлении новых товаров.');
-        } finally {
-            setMsLoading(false);
-        }
+        const toAdd = [];
+        for (const item of selectedItems) { try { toAdd.push(await mapMsItemToProduct(item)); } catch (e) {} }
+        if (toAdd.length > 0) onBulkAddProducts(toAdd);
+        setMsLoading(false); setSelectedMsIds(new Set()); alert('Добавлено!');
     }
 
     const msSourceFields = [
-        { key: 'images', label: 'Фото' },
-        { key: 'name', label: 'Наименование' },
-        { key: 'categories', label: 'Группа (Категория)' },
-        { key: 'buyPrice', label: 'Себестоимость' },
-        { key: 'salePrice', label: 'Цена' },
-        { key: 'article', label: 'Артикул' },
-        { key: 'code', label: 'Код' },
-        { key: 'description', label: 'Описание' },
-        { key: 'uom', label: 'Ед. изм.' },
-        { key: 'weight', label: 'Вес' },
+        { key: 'images', label: 'Фото' }, { key: 'name', label: 'Наименование' }, { key: 'categories', label: 'Группа' },
+        { key: 'buyPrice', label: 'Себест.' }, { key: 'salePrice', label: 'Цена' }, { key: 'article', label: 'Артикул' },
+        { key: 'code', label: 'Код' }, { key: 'description', label: 'Описание' }, { key: 'uom', label: 'Ед. изм.' }, { key: 'weight', label: 'Вес' },
     ];
-
     const targetFields = [
-        { key: '', label: 'Не импортировать' },
-        { key: 'name', label: 'Название' },
-        { key: 'description', label: 'Описание' },
-        { key: 'pricePerUnit', label: 'Цена продажи' },
-        { key: 'costPrice', label: 'Себестоимость' },
-        { key: 'unitValue', label: 'Значение ед.' },
-        { key: 'categories', label: 'Категория' },
-        { key: 'imageUrls', label: 'Изображения' },
+        { key: '', label: 'Не импорт.' }, { key: 'name', label: 'Название' }, { key: 'description', label: 'Описание' },
+        { key: 'pricePerUnit', label: 'Цена прод.' }, { key: 'costPrice', label: 'Себест.' }, { key: 'unitValue', label: 'Вес ед.' },
+        { key: 'categories', label: 'Категория' }, { key: 'imageUrls', label: 'Изобр.' },
     ];
 
     return (
         <div className="bg-white rounded-none sm:rounded-lg shadow-none sm:shadow-sm px-0 py-2 sm:p-6 relative w-full">
             <div className="mb-2 sm:mb-4 px-1 sm:px-0">
-                <button 
-                    onClick={() => setIsIdInfoVisible(!isIdInfoVisible)}
-                    className="text-xs text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1 cursor-pointer"
-                    title="Показать информацию об ID"
-                >
+                <button onClick={() => setIsIdInfoVisible(!isIdInfoVisible)} className="text-xs text-gray-400 hover:text-indigo-600 transition-colors flex items-center gap-1 cursor-pointer">
                     <span>ID магазина: {shopId}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transform transition-transform ${isIdInfoVisible ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 transform transition-transform ${isIdInfoVisible ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                 </button>
             </div>
-
             {isIdInfoVisible && (
                 <div className="mb-2 sm:mb-6 p-2 sm:p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                            </svg>
-                            ID магазина (Административный)
-                        </h3>
-                        <p className="text-xs text-indigo-700 mt-1">
-                            Используйте этот ID для входа в панель управления с другого устройства. <span className="font-bold text-red-600">Держите его в секрете</span> и не сообщайте покупателям.
-                        </p>
+                        <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>ID магазина</h3>
+                        <p className="text-xs text-indigo-700 mt-1">Используйте этот ID для входа. <span className="font-bold text-red-600">Держите его в секрете.</span></p>
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <code className="flex-grow sm:flex-grow-0 px-3 py-2 bg-white border border-indigo-200 rounded text-sm font-mono text-gray-700 select-all">
-                            {shopId}
-                        </code>
-                        <button 
-                            onClick={copyShopId}
-                            className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors"
-                            title="Копировать ID"
-                        >
-                            <CopyIcon className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto"><code className="flex-grow sm:flex-grow-0 px-3 py-2 bg-white border border-indigo-200 rounded text-sm font-mono text-gray-700 select-all">{shopId}</code><button onClick={copyShopId} className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><CopyIcon className="w-5 h-5" /></button></div>
                 </div>
             )}
-
             <div className="border-b">
                  <div className="flex items-center space-x-2 sm:space-x-3 overflow-x-auto pb-2 sm:pb-4 px-2 sm:-mx-6 sm:px-6" role="tablist" aria-orientation="horizontal">
                     <TabButton tabId="pricelist">Каталог</TabButton>
@@ -1436,94 +724,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">
                         <h3 className="text-lg font-semibold text-gray-700">Управление товарами</h3>
-                        
-                        <div className="relative" ref={roleSelectorRef}>
-                            <button 
-                                onClick={() => setIsRoleSelectorOpen(!isRoleSelectorOpen)} 
-                                className={`p-1 rounded-full hover:bg-gray-100 ${previewRole ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}
-                                title="Предпросмотр для роли"
-                            >
-                                <UsersIcon className="w-5 h-5" />
-                            </button>
-                            {isRoleSelectorOpen && (
-                                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1">
-                                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 border-b bg-gray-50">
-                                        Предпросмотр для роли
-                                    </div>
-                                    <button 
-                                        onClick={() => { setPreviewRole(null); setIsRoleSelectorOpen(false); }}
-                                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${!previewRole ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}
-                                    >
-                                        Администратор (Все)
-                                    </button>
-                                    {roles.map(role => (
-                                        <button 
-                                            key={role}
-                                            onClick={() => { setPreviewRole(role); setIsRoleSelectorOpen(false); }}
-                                            className={`block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${previewRole === role ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}
-                                        >
-                                            {role}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <button onClick={() => setIsHelpVisible(!isHelpVisible)} className="text-gray-400 hover:text-gray-600">
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                            </svg>
-                        </button>
+                        <div className="relative" ref={roleSelectorRef}><button onClick={() => setIsRoleSelectorOpen(!isRoleSelectorOpen)} className={`p-1 rounded-full hover:bg-gray-100 ${previewRole ? 'text-indigo-600 bg-indigo-50' : 'text-gray-400'}`}><UsersIcon className="w-5 h-5" /></button>{isRoleSelectorOpen && (<div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1"><div className="px-3 py-2 text-xs font-semibold text-gray-500 border-b bg-gray-50">Предпросмотр для роли</div><button onClick={() => { setPreviewRole(null); setIsRoleSelectorOpen(false); }} className={`block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${!previewRole ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}>Админ (Все)</button>{roles.map(role => (<button key={role} onClick={() => { setPreviewRole(role); setIsRoleSelectorOpen(false); }} className={`block w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 ${previewRole === role ? 'text-indigo-600 font-medium' : 'text-gray-700'}`}>{role}</button>))}</div>)}</div>
+                        <button onClick={() => setIsHelpVisible(!isHelpVisible)} className="text-gray-400 hover:text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg></button>
                     </div>
-                    
-                    {previewRole && (
-                        <div className="mb-4 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-md flex items-center justify-between">
-                            <span className="text-sm text-indigo-800">
-                                Режим просмотра: <b>{previewRole}</b>
-                            </span>
-                            <button onClick={() => setPreviewRole(null)} className="text-xs text-indigo-500 hover:text-indigo-700">
-                                Сбросить
-                            </button>
-                        </div>
-                    )}
-
-                     <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isHelpVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                        <div className="overflow-hidden">
-                             <p className="text-sm text-gray-600 pb-4">
-                                <b>Изображения:</b> нажмите на фото товара, чтобы открыть галерею и управлять ей (добавлять, удалять).<br/>
-                                <b>Детали:</b> нажмите на название товара, чтобы изменить его название, описание, ед. изм., вид и категории.<br/>
-                                <b>Статус:</b> кнопка <b className="text-red-500">Стоп</b>/<b>Глаз</b> циклически меняет статус (Доступен → Нет в наличии → Скрыт).<br/>
-
-                                <b>Порции (для кг):</b> нажимайте на иконки, чтобы включить/выключить продажу (четверть/половина).<br/>
-                                <b>Цены и значение:</b> нажмите на цену (₽/ед.изм) или значение (Х ед.изм/вид), чтобы их изменить.
-                             </p>
-                        </div>
-                     </div>
-                     
-                     <div className="mb-6">
-                        <CategoryDropdown
-                            categories={adminCategories}
-                            selectedCategory={adminSelectedCategory}
-                            onSelectCategory={setAdminSelectedCategory}
-                            displayAsIconButton={true}
-                        />
-                     </div>
-                     <ProductList
-                        products={adminFilteredProducts}
-                        onAddToCart={() => {}} 
-                        isAdminView={true}
-                        onDeleteProduct={onDeleteProduct}
-                        onCycleStatus={onCycleStatus}
-                        onUpdatePortions={onUpdatePortions}
-                        onUpdatePrices={onUpdatePrices}
-                        onUpdateUnitValue={onUpdateUnitValue}
-                        onUpdateDetails={onUpdateDetails}
-                        onUpdateImages={onUpdateImages}
-                        allCategories={allCategories}
-                        onUpdateCategories={onUpdateCategories}
-                        onCycleBadge={onCycleBadge}
-                        badges={badges}
-                     />
+                    {previewRole && (<div className="mb-4 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-md flex items-center justify-between"><span className="text-sm text-indigo-800">Режим просмотра: <b>{previewRole}</b></span><button onClick={() => setPreviewRole(null)} className="text-xs text-indigo-500 hover:text-indigo-700">Сбросить</button></div>)}
+                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isHelpVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}><div className="overflow-hidden"><p className="text-sm text-gray-600 pb-4"><b>Изображения:</b> нажмите на фото.<br/><b>Детали:</b> нажмите на название.<br/><b>Статус:</b> циклически меняет статус.<br/><b>Порции:</b> нажимайте на иконки.<br/><b>Цены:</b> нажмите на цену или значение.</p></div></div>
+                    <div className="mb-6"><CategoryDropdown categories={adminCategories} selectedCategory={adminSelectedCategory} onSelectCategory={setAdminSelectedCategory} displayAsIconButton={true}/></div>
+                    <ProductList products={adminFilteredProducts} onAddToCart={() => {}} isAdminView={true} onDeleteProduct={onDeleteProduct} onCycleStatus={onCycleStatus} onUpdatePortions={onUpdatePortions} onUpdatePrices={onUpdatePrices} onUpdateUnitValue={onUpdateUnitValue} onUpdateDetails={onUpdateDetails} onUpdateImages={onUpdateImages} allCategories={allCategories} onUpdateCategories={onUpdateCategories} onCycleBadge={onCycleBadge} badges={badges}/>
                 </div>
             )}
 
@@ -1533,256 +740,74 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                         <div className="flex items-center gap-3">
                             <h3 className="text-lg font-semibold text-gray-700">Интеграция с МойСклад</h3>
                             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 rounded-full border border-gray-200">
-                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${
-                                    msIsConnected === true ? 'bg-green-500 animate-pulse' : 
-                                    msIsConnected === false ? 'bg-red-500' : 
-                                    (msLogin && msPassword) ? 'bg-yellow-500' : 'bg-gray-300'
-                                }`}></div>
-                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                                    {msIsConnected === true ? 'Активна' : msIsConnected === false ? 'Ошибка' : 'Ожидание'}
-                                </span>
+                                <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${msIsConnected === true ? 'bg-green-500 animate-pulse' : msIsConnected === false ? 'bg-red-500' : 'bg-gray-300'}`}></div>
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{msIsConnected === true ? 'Активна' : msIsConnected === false ? 'Ошибка' : 'Ожидание'}</span>
                             </div>
                         </div>
-                        <button 
-                            type="button"
-                            onClick={() => handleLoadMoySklad(false)} 
-                            disabled={msLoading}
-                            className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"
-                        >
-                            <RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />
-                            Обновить данные сейчас
-                        </button>
+                        <button type="button" onClick={() => handleLoadMoySklad(false)} disabled={msLoading} className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"><RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />Обновить</button>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                <span className="bg-blue-100 text-blue-600 p-1 rounded-full"><CloudDownloadIcon className="w-4 h-4"/></span>
-                                Подключение
-                            </h4>
+                            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><span className="bg-blue-100 text-blue-600 p-1 rounded-full"><CloudDownloadIcon className="w-4 h-4"/></span>Подключение</h4>
                             <div className="space-y-3">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Логин (Email)</label>
-                                    <input 
-                                        type="text" 
-                                        value={msLogin} 
-                                        onChange={e => { setMsLogin(e.target.value); setMsIsConnected(null); }} 
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
-                                        placeholder="admin@example"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Пароль</label>
-                                    <input 
-                                        type="password" 
-                                        value={msPassword} 
-                                        onChange={e => { setMsPassword(e.target.value); setMsIsConnected(null); }} 
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <input 
-                                        type="checkbox" 
-                                        id="useProxy"
-                                        checked={msUseProxy}
-                                        onChange={e => setMsUseProxy(e.target.checked)}
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="useProxy" className="text-xs text-gray-500">
-                                        Использовать CORS-прокси (обязательно для мобильных)
-                                    </label>
-                                </div>
+                                <div><label className="block text-sm font-medium text-gray-700">Логин (Email)</label><input type="text" value={msLogin} onChange={e => { setMsLogin(e.target.value); setMsIsConnected(null); }} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm" placeholder="admin@example"/></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Пароль</label><input type="password" value={msPassword} onChange={e => { setMsPassword(e.target.value); setMsIsConnected(null); }} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"/></div>
+                                <div className="flex items-center gap-2 mt-2"><input type="checkbox" id="useProxy" checked={msUseProxy} onChange={e => setMsUseProxy(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded"/><label htmlFor="useProxy" className="text-xs text-gray-500">Использовать CORS-прокси</label></div>
                             </div>
                         </div>
-
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка обновления</h4>
-                            
-                            <div className="space-y-4">
-                                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <input 
-                                                type="checkbox" 
-                                                id="msAutoRefresh"
-                                                checked={msAutoRefresh}
-                                                onChange={e => setMsAutoRefresh(e.target.checked)}
-                                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                            />
-                                            <label htmlFor="msAutoRefresh" className="text-sm font-bold text-indigo-900">
-                                                Авто-обновление
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs text-indigo-700">Интервал:</span>
-                                        <div className="flex items-center bg-white border border-indigo-200 rounded-md overflow-hidden">
-                                            <input 
-                                                type="number" 
-                                                min="1"
-                                                max="3600"
-                                                value={msRefreshInterval}
-                                                onChange={e => setMsRefreshInterval(Math.max(1, parseInt(e.target.value, 10) || 5))}
-                                                className="w-16 px-2 py-1 text-xs text-center focus:outline-none border-r border-indigo-100"
-                                            />
-                                            <span className="px-2 text-[10px] font-bold text-gray-400 uppercase">сек.</span>
-                                        </div>
-                                        <span className="text-[10px] text-indigo-400 italic leading-tight">
-                                            Синхронизация "замочков" <br/>будет срабатывать автоматически.
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1 grid grid-cols-2 gap-x-4">
-                                    {msSourceFields.map(f => (
-                                        <div key={f.key} className="flex items-center">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={msFields[f.key as keyof typeof msFields]} 
-                                                onChange={e => setMsFields(prev => ({...prev, [f.key]: e.target.checked}))} 
-                                                className="h-3.5 w-3.5 text-indigo-600 border-gray-300 rounded"
-                                            />
-                                            <label className="ml-2 text-[11px] text-gray-600 truncate">{f.label}</label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка полей</h4>
+                            <div className="space-y-1 grid grid-cols-2 gap-x-4">{msSourceFields.map(f => (<div key={f.key} className="flex items-center"><input type="checkbox" checked={msFields[f.key as keyof typeof msFields]} onChange={e => setMsFields(prev => ({...prev, [f.key]: e.target.checked}))} className="h-3.5 w-3.5 text-indigo-600 border-gray-300 rounded"/><label className="ml-2 text-[11px] text-gray-600 truncate">{f.label}</label></div>))}</div>
                         </div>
                     </div>
 
-                    {msError && (
-                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200 flex flex-col gap-2">
-                            <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"></div>
-                                <span className="font-bold">Ошибка подключения</span>
-                            </div>
-                            <p className="text-xs leading-relaxed">{msError}</p>
-                            {!msUseProxy && <p className="text-[10px] text-red-600 uppercase font-bold mt-1">Попробуйте включить CORS-прокси выше.</p>}
-                        </div>
-                    )}
+                    {msError && <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200"><b>Ошибка:</b> {msError}</div>}
 
                     {msData.length > 0 && (
                         <div className="bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col">
                             <div className="p-3 bg-gray-50 border-b flex justify-between items-center flex-wrap gap-2">
-                                <span className="font-semibold text-gray-700 text-sm">Найдено в МойСклад: {msData.length}</span>
+                                <span className="font-semibold text-gray-700 text-sm">Товаров в МойСклад: {msData.length}</span>
                                 {selectedMsIds.size > 0 && (
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-indigo-600 font-bold">Выбрано: {selectedMsIds.size}</span>
-                                        <button 
-                                            onClick={handleAddSelectedToCatalog}
-                                            disabled={msLoading}
-                                            className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
-                                            title="Обновит те товары, что уже есть, или создаст недостающие"
-                                        >
-                                            Синхронизировать выбранные
-                                        </button>
-                                        <button 
-                                            onClick={handleAddAsNew}
-                                            disabled={msLoading}
-                                            className="bg-green-600 text-white text-[10px] font-bold py-1.5 px-3 rounded hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
-                                            title="Принудительно создаст новые карточки товаров"
-                                        >
-                                            Добавить как новые
-                                        </button>
+                                        <button onClick={handleAddSelectedToCatalog} disabled={msLoading} className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm disabled:opacity-50">Синхронизировать ({selectedMsIds.size})</button>
+                                        <button onClick={handleAddAsNew} disabled={msLoading} className="bg-green-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm disabled:opacity-50">Добавить как новые</button>
                                     </div>
                                 )}
                             </div>
-
                             <div className="overflow-x-auto max-h-[600px] border-t">
                                 <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
                                     <thead className="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 border-b">
                                         <tr className="bg-indigo-50/50">
-                                            <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
-                                            <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
-                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (
-                                                <th key={`map-${f.key}`} className="px-2 py-2 border-r bg-indigo-50">
-                                                    <select 
-                                                        value={msMapping[f.key] || ''} 
-                                                        onChange={(e) => setMsMapping(prev => ({...prev, [f.key]: e.target.value}))}
-                                                        className="w-full bg-white border border-indigo-200 rounded text-[9px] px-1 py-0.5 font-bold text-indigo-700 focus:ring-1 focus:ring-indigo-500"
-                                                    >
-                                                        {targetFields.map(tf => (
-                                                            <option key={tf.key} value={tf.key}>{tf.label}</option>
-                                                        ))}
-                                                    </select>
-                                                </th>
-                                            ))}
+                                            <th className="px-2 py-2 border-r w-8 bg-indigo-50"></th><th className="px-2 py-2 border-r w-8 bg-indigo-50"></th>
+                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (<th key={`map-${f.key}`} className="px-2 py-2 border-r bg-indigo-50"><select value={msMapping[f.key] || ''} onChange={(e) => setMsMapping(prev => ({...prev, [f.key]: e.target.value}))} className="w-full bg-white border border-indigo-200 rounded text-[9px] px-1 py-0.5 font-bold text-indigo-700">{targetFields.map(tf => (<option key={tf.key} value={tf.key}>{tf.label}</option>))}</select></th>))}
                                             <th className="bg-indigo-50"></th>
                                         </tr>
                                         <tr>
-                                            <th className="px-2 py-3 w-8 border-r text-center">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={msData.length > 0 && selectedMsIds.size === msData.length}
-                                                    onChange={handleMsToggleAll}
-                                                    className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
-                                                />
-                                            </th>
-                                            <th className="px-2 py-3 w-8 border-r text-center" title="Автоматическая синхронизация (замочек)">
-                                                <LockClosedIcon className="w-3 h-3 mx-auto text-indigo-400" />
-                                            </th>
-                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (
-                                                <th key={f.key} className="px-2 py-3 border-r font-bold truncate">{f.label}</th>
-                                            ))}
-                                            <th className="px-2 py-3 w-32 font-bold">Связь в каталоге</th>
+                                            <th className="px-2 py-3 w-8 border-r text-center"><input type="checkbox" checked={msData.length > 0 && selectedMsIds.size === msData.length} onChange={handleMsToggleAll} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/></th>
+                                            <th className="px-2 py-3 w-8 border-r text-center"><LockClosedIcon className="w-3 h-3 mx-auto text-indigo-400" /></th>
+                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(f => (<th key={f.key} className="px-2 py-3 border-r font-bold truncate">{f.label}</th>))}
+                                            <th className="px-2 py-3 w-32 font-bold">Связь</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white">
                                         {msData.map((item) => {
-                                            const isLocked = msLockedIds.has(item.id);
-                                            const linkedProduct = products.find(p => p.msId === item.id);
-                                            const authStr = btoa(`${msLogin}:${msPassword}`);
+                                            const isLocked = msLockedIds.has(item.id), linkedProduct = products.find(p => p.msId === item.id), authStr = btoa(`${msLogin}:${msPassword}`);
                                             return (
-                                                <tr key={item.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''} ${isLocked ? 'bg-blue-50/20' : ''}`}>
-                                                    <td className="px-2 py-2 border-r text-center">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={selectedMsIds.has(item.id)}
-                                                            onChange={() => handleMsToggleRow(item.id)}
-                                                            className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-2 border-r text-center">
-                                                        <button 
-                                                            onClick={() => handleMsToggleLock(item.id)}
-                                                            className={`p-1 rounded-full transition-all transform active:scale-90 ${isLocked ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-500'}`}
-                                                            title={isLocked ? "Авто-синхронизация включена" : "Включить авто-синхронизацию"}
-                                                        >
-                                                            {isLocked ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}
-                                                        </button>
-                                                    </td>
-                                                    
-                                                    {msFields.images && (
-                                                        <td className="px-2 py-2 border-r text-center">
-                                                            {item.images && item.images.length > 0 ? (
-                                                                <MsThumbnail 
-                                                                    url={item.images[0]} 
-                                                                    auth={authStr} 
-                                                                    useProxy={msUseProxy} 
-                                                                />
-                                                            ) : <span className="text-gray-300">—</span>}
-                                                        </td>
-                                                    )}
-                                                    {msFields.name && <td className="px-2 py-2 border-r font-medium text-gray-900 truncate" title={item.name}>{item.name}</td>}
-                                                    {msFields.categories && <td className="px-2 py-2 border-r"><span className="px-1.5 py-0.5 bg-gray-100 rounded text-[9px] font-medium text-gray-600">{item.categories}</span></td>}
-                                                    {msFields.buyPrice && <td className="px-2 py-2 border-r whitespace-nowrap">{item.buyPrice.toLocaleString('ru-RU')} ₽</td>}
-                                                    {msFields.salePrice && <td className="px-2 py-2 border-r whitespace-nowrap">{item.salePrice.toLocaleString('ru-RU')} ₽</td>}
+                                                <tr key={item.id} className={`border-b hover:bg-gray-50 ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}>
+                                                    <td className="px-2 py-2 border-r text-center"><input type="checkbox" checked={selectedMsIds.has(item.id)} onChange={() => handleMsToggleRow(item.id)} className="h-3 w-3 text-indigo-600 border-gray-300 rounded"/></td>
+                                                    <td className="px-2 py-2 border-r text-center"><button onClick={() => handleMsToggleLock(item.id)} className={`p-1 rounded-full ${isLocked ? 'bg-indigo-600 text-white' : 'text-gray-300'}`}>{isLocked ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}</button></td>
+                                                    {msFields.images && (<td className="px-2 py-2 border-r text-center">{item.images && item.images.length > 0 ? <MsThumbnail url={item.images[0]} auth={authStr} useProxy={msUseProxy} /> : '—'}</td>)}
+                                                    {msFields.name && <td className="px-2 py-2 border-r truncate">{item.name}</td>}
+                                                    {msFields.categories && <td className="px-2 py-2 border-r truncate">{item.categories}</td>}
+                                                    {msFields.buyPrice && <td className="px-2 py-2 border-r">{item.buyPrice} ₽</td>}
+                                                    {msFields.salePrice && <td className="px-2 py-2 border-r">{item.salePrice} ₽</td>}
                                                     {msFields.article && <td className="px-2 py-2 border-r truncate">{item.article}</td>}
                                                     {msFields.code && <td className="px-2 py-2 border-r truncate">{item.code}</td>}
-                                                    {msFields.description && <td className="px-2 py-2 border-r truncate text-gray-400" title={item.description}>{item.description}</td>}
+                                                    {msFields.description && <td className="px-2 py-2 border-r truncate">{item.description}</td>}
                                                     {msFields.uom && <td className="px-2 py-2 border-r">{item.uom}</td>}
                                                     {msFields.weight && <td className="px-2 py-2 border-r">{item.weight}</td>}
-                                                    
-                                                    <td className="px-2 py-2">
-                                                        {linkedProduct ? (
-                                                            <div className="flex items-center gap-1 text-[9px] font-bold text-green-600 uppercase tracking-tighter">
-                                                                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                                                Связан
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-[9px] text-gray-300 font-bold uppercase tracking-tighter">Не привязан</span>
-                                                        )}
-                                                    </td>
+                                                    <td className="px-2 py-2">{linkedProduct ? <span className="text-[9px] text-green-600 font-bold uppercase">Связан</span> : <span className="text-[9px] text-gray-300 font-bold uppercase">Нет</span>}</td>
                                                 </tr>
                                             );
                                         })}
@@ -1796,695 +821,94 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
             {activeTab === 'products_master' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <div className="flex items-center gap-2 mb-4">
-                        <h3 className="text-lg font-semibold text-gray-700">Все товары (Справочник)</h3>
-                        <button
-                            onClick={() => setIsMasterFilterVisible(!isMasterFilterVisible)}
-                            className="p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            aria-expanded={isMasterFilterVisible}
-                            title="Фильтры и поиск"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                    </div>
-                    
-                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isMasterFilterVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                        <div className="overflow-hidden">
-                            <div className="mb-4 bg-gray-50 p-4 rounded-lg border">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label htmlFor="master-search" className="block text-sm font-medium text-gray-700">Поиск</label>
-                                        <input
-                                            type="text"
-                                            id="master-search"
-                                            placeholder="Название или описание..."
-                                            value={tableSearchTerm}
-                                            onChange={(e) => setTableSearchTerm(e.target.value)}
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <CategoryDropdown
-                                            categories={allCategories}
-                                            selectedCategory={tableFilterCategory}
-                                            onSelectCategory={setTableFilterCategory}
-                                            label="Категория"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label htmlFor="master-status-filter" className="block text-sm font-medium text-gray-700">Статус</label>
-                                        <select
-                                            id="master-status-filter"
-                                            value={tableFilterStatus}
-                                            onChange={(e) => setTableFilterStatus(e.target.value as ProductStatus | 'all')}
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        >
-                                            <option value="all">Все статусы</option>
-                                            <option value={ProductStatus.Available}>Доступен</option>
-                                            <option value={ProductStatus.OutOfStock}>Нет в наличии</option>
-                                            <option value={ProductStatus.Hidden}>Скрыт</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div className="md:col-span-3 pt-4 border-t mt-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Отображаемые столбцы</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                            {TABLE_COLUMNS_OPTIONS.filter(c => !['price', 'markup', 'portions', 'special'].includes(c.key)).map((col) => (
-                                                <div key={col.key} className="flex items-center">
-                                                    <input
-                                                        id={`master-col-toggle-${col.key}`}
-                                                        type="checkbox"
-                                                        checked={visibleMasterColumns.includes(col.key)}
-                                                        onChange={() => handleToggleMasterColumn(col.key)}
-                                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
-                                                        disabled={visibleMasterColumns.length <= 1 && visibleMasterColumns.includes(col.key)}
-                                                    />
-                                                    <label htmlFor={`master-col-toggle-${col.key}`} className="ml-2 text-sm text-gray-600 cursor-pointer select-none">
-                                                        {col.label}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {selectedProductIds.size > 0 && (
-                        <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between animate-fade-in-up">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-indigo-700 text-sm">Выбрано: {selectedProductIds.size}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={handleBulkDeleteProducts}
-                                    className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 transition-colors flex items-center gap-1"
-                                >
-                                    <TrashIcon className="w-4 h-4" />
-                                    Удалить выбранные
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    <ProductTable
-                        products={filteredTableProducts}
-                        allCategories={allCategories}
-                        onDeleteProduct={onDeleteProduct}
-                        onCycleStatus={onCycleStatus}
-                        onUpdatePortions={onUpdatePortions}
-                        onUpdatePrices={onUpdatePrices}
-                        onUpdatePriceTiers={onUpdateProductPriceTiers}
-                        onUpdateUspPrices={onUpdateUspPrices}
-                        onUpdateUspMarkupFlags={onUpdateUspMarkupFlags}
-                        onUpdateUnitValue={onUpdateUnitValue}
-                        onUpdateDetails={onUpdateDetails}
-                        onUpdateCategories={onUpdateCategories}
-                        onUpdateImages={onUpdateImages}
-                        onUpdateVisibility={onUpdateVisibility}
-                        uspMarkups={uspMarkups}
-                        setUspMarkups={setUspMarkups}
-                        onApplyMarkups={handleApplyMarkups}
-                        roles={roles}
-                        visibleColumns={visibleMasterColumns}
-                        onUpdateTierPortions={onUpdateTierPortions}
-                        onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
-                        selectedIds={selectedProductIds}
-                        onToggleRow={handleTableToggleRow}
-                        onToggleAll={handleTableToggleAll}
-                        isAllSelected={filteredTableProducts.length > 0 && filteredTableProducts.every(p => selectedProductIds.has(p.id))}
-                        isMasterView={true}
-                    />
+                    <div className="flex items-center gap-2 mb-4"><h3 className="text-lg font-semibold text-gray-700">Все товары</h3><button onClick={() => setIsMasterFilterVisible(!isMasterFilterVisible)} className="p-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" /></svg></button></div>
+                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isMasterFilterVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}><div className="overflow-hidden"><div className="mb-4 bg-gray-50 p-4 rounded-lg border"><div className="grid grid-cols-1 md:grid-cols-3 gap-4"><div><label className="block text-sm font-medium text-gray-700">Поиск</label><input type="text" placeholder="Название..." value={tableSearchTerm} onChange={(e) => setTableSearchTerm(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div><div><CategoryDropdown categories={allCategories} selectedCategory={tableFilterCategory} onSelectCategory={setTableFilterCategory} label="Категория"/></div><div><label className="block text-sm font-medium text-gray-700">Статус</label><select value={tableFilterStatus} onChange={(e) => setTableFilterStatus(e.target.value as ProductStatus | 'all')} className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md"><option value="all">Все</option><option value={ProductStatus.Available}>Доступен</option><option value={ProductStatus.OutOfStock}>Нет</option><option value={ProductStatus.Hidden}>Скрыт</option></select></div><div className="md:col-span-3 pt-4 border-t mt-2"><label className="block text-sm font-medium text-gray-700 mb-2">Столбцы</label><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">{TABLE_COLUMNS_OPTIONS.filter(c => !['price', 'markup', 'portions', 'special'].includes(c.key)).map((col) => (<div key={col.key} className="flex items-center"><input id={`master-col-toggle-${col.key}`} type="checkbox" checked={visibleMasterColumns.includes(col.key)} onChange={() => handleToggleMasterColumn(col.key)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`master-col-toggle-${col.key}`} className="ml-2 text-sm text-gray-600">{col.label}</label></div>))}</div></div></div></div></div></div>
+                    {selectedProductIds.size > 0 && (<div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between"><span className="font-bold text-indigo-700 text-sm">Выбрано: {selectedProductIds.size}</span><button onClick={handleBulkDeleteProducts} className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded hover:bg-red-700 flex items-center gap-1"><TrashIcon className="w-4 h-4" />Удалить</button></div>)}
+                    <ProductTable products={filteredTableProducts} allCategories={allCategories} onDeleteProduct={onDeleteProduct} onCycleStatus={onCycleStatus} onUpdatePortions={onUpdatePortions} onUpdatePrices={onUpdatePrices} onUpdatePriceTiers={onUpdateProductPriceTiers} onUpdateUspPrices={onUpdateUspPrices} onUpdateUspMarkupFlags={onUpdateProductUspMarkupFlags} onUpdateUnitValue={onUpdateUnitValue} onUpdateDetails={onUpdateDetails} onUpdateCategories={onUpdateCategories} onUpdateImages={onUpdateImages} onUpdateVisibility={onUpdateVisibility} uspMarkups={uspMarkups} setUspMarkups={setUspMarkups} onApplyMarkups={handleApplyMarkups} roles={roles} visibleColumns={visibleMasterColumns} onUpdateTierPortions={onUpdateTierPortions} onUpdateTierPriceOverrides={onUpdateTierPriceOverrides} selectedIds={selectedProductIds} onToggleRow={handleTableToggleRow} onToggleAll={handleTableToggleAll} isAllSelected={filteredTableProducts.length > 0 && filteredTableProducts.every(p => selectedProductIds.has(p.id))} isMasterView={true}/>
                 </div>
             )}
             
             {activeTab === 'table' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <div className="flex items-center gap-2 mb-4">
-                        <h3 className="text-lg font-semibold text-gray-700">Редактирование прайс-листа</h3>
-                        <button onClick={() => setIsTableHelpVisible(!isTableHelpVisible)} className="text-gray-400 hover:text-gray-600">
-                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                    </div>
-                     <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isTableHelpVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-                        <div className="overflow-hidden">
-                             <p className="text-sm text-gray-600 pb-4">
-                                Выберите вкладку с типом цен, который хотите отредактировать. <br/>
-                                <b>Базовый:</b> основные розничные цены. <br/>
-                                <b>Роли (Опт и др.):</b> цены, специфичные для группы клиентов.
-                             </p>
-                        </div>
-                     </div>
-
+                    <div className="flex items-center gap-2 mb-4"><h3 className="text-lg font-semibold text-gray-700">Редактирование прайс-листа</h3><button onClick={() => setIsTableHelpVisible(!isTableHelpVisible)} className="text-gray-400 hover:text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg></button></div>
+                    <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isTableHelpVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}><div className="overflow-hidden"><p className="text-sm text-gray-600 pb-4">Выберите тип цен. <b>Базовый:</b> розница. <b>Роли:</b> спец. цены для групп.</p></div></div>
                     <div className="mb-4">
-                        <div className="flex space-x-2 overflow-x-auto pb-2 border-b border-gray-200 mb-4">
-                            {['Базовый (Розничный)', ...roles.filter(r => r !== 'Розничный')].map(role => (
-                                <button
-                                    key={role}
-                                    onClick={() => setActivePriceListRole(role)}
-                                    className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-t-lg transition-colors ${
-                                        activePriceListRole === role 
-                                        ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' 
-                                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                                    }`}
-                                >
-                                    {role}
-                                </button>
-                            ))}
-                        </div>
-
-                        <button
-                            onClick={() => setIsTableFilterVisible(!isTableFilterVisible)}
-                            className="p-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            aria-expanded={isTableFilterVisible}
-                            aria-controls="table-filters-panel"
-                            title="Фильтры и поиск"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        <div
-                            id="table-filters-panel"
-                            className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isTableFilterVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
-                        >
-                            <div className="overflow-hidden">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg border">
-                                    <div>
-                                        <label htmlFor="table-search" className="block text-sm font-medium text-gray-700">Поиск</label>
-                                        <input
-                                            type="text"
-                                            id="table-search"
-                                            placeholder="Название или описание..."
-                                            value={tableSearchTerm}
-                                            onChange={(e) => setTableSearchTerm(e.target.value)}
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <CategoryDropdown
-                                            categories={allCategories}
-                                            selectedCategory={tableFilterCategory}
-                                            onSelectCategory={setTableFilterCategory}
-                                            label="Категория"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label htmlFor="table-status-filter" className="block text-sm font-medium text-gray-700">Статус</label>
-                                        <select
-                                            id="table-status-filter"
-                                            value={tableFilterStatus}
-                                            onChange={(e) => setTableFilterStatus(e.target.value as ProductStatus | 'all')}
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                        >
-                                            <option value="all">Все статусы</option>
-                                            <option value={ProductStatus.Available}>Доступен</option>
-                                            <option value={ProductStatus.OutOfStock}>Нет в наличии</option>
-                                            <option value={ProductStatus.Hidden}>Скрыт</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div className="md:col-span-3 pt-4 border-t mt-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Отображаемые столбцы</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                            {TABLE_COLUMNS_OPTIONS.map((col) => (
-                                                <div key={col.key} className="flex items-center">
-                                                    <input
-                                                        id={`col-toggle-${col.key}`}
-                                                        type="checkbox"
-                                                        checked={visibleTableColumns.includes(col.key)}
-                                                        onChange={() => handleToggleTableColumn(col.key)}
-                                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
-                                                        disabled={visibleTableColumns.length <= 1 && visibleTableColumns.includes(col.key)}
-                                                    />
-                                                    <label htmlFor={`col-toggle-${col.key}`} className="ml-2 text-sm text-gray-600 cursor-pointer select-none">
-                                                        {col.label}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <div className="flex space-x-2 overflow-x-auto pb-2 border-b border-gray-200 mb-4">{['Базовый (Розничный)', ...roles.filter(r => r !== 'Розничный')].map(role => (<button key={role} onClick={() => setActivePriceListRole(role)} className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-t-lg ${activePriceListRole === role ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600' : 'text-gray-500 hover:bg-gray-50'}`}>{role}</button>))}</div>
+                        <button onClick={() => setIsTableFilterVisible(!isTableFilterVisible)} className="p-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 12.414V17a1 1 0 01-1.447.894l-2-1A1 1 0 018 16v-3.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" /></svg></button>
+                        <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isTableFilterVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}><div className="overflow-hidden"><div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 p-4 bg-gray-50 rounded-lg border"><div><label className="block text-sm font-medium text-gray-700">Поиск</label><input type="text" value={tableSearchTerm} onChange={(e) => setTableSearchTerm(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div><div><CategoryDropdown categories={allCategories} selectedCategory={tableFilterCategory} onSelectCategory={setTableFilterCategory} label="Категория"/></div><div><label className="block text-sm font-medium text-gray-700">Статус</label><select value={tableFilterStatus} onChange={(e) => setTableFilterStatus(e.target.value as ProductStatus | 'all')} className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md"><option value="all">Все</option><option value={ProductStatus.Available}>Доступен</option><option value={ProductStatus.OutOfStock}>Нет</option><option value={ProductStatus.Hidden}>Скрыт</option></select></div><div className="md:col-span-3 pt-4 border-t mt-2"><label className="block text-sm font-medium text-gray-700 mb-2">Столбцы</label><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">{TABLE_COLUMNS_OPTIONS.map((col) => (<div key={col.key} className="flex items-center"><input id={`col-toggle-${col.key}`} type="checkbox" checked={visibleTableColumns.includes(col.key)} onChange={() => handleToggleTableColumn(col.key)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`col-toggle-${col.key}`} className="ml-2 text-sm text-gray-600">{col.label}</label></div>))}</div></div></div></div></div>
                     </div>
-
-                    <ProductTable
-                        key={activePriceListRole} 
-                        products={filteredTableProducts}
-                        allCategories={allCategories}
-                        onDeleteProduct={onDeleteProduct}
-                        onCycleStatus={onCycleStatus}
-                        onUpdatePortions={onUpdatePortions}
-                        onUpdatePrices={onUpdatePrices}
-                        onUpdatePriceTiers={onUpdateProductPriceTiers}
-                        onUpdateUspPrices={onUpdateUspPrices}
-                        onUpdateUspMarkupFlags={onUpdateUspMarkupFlags}
-                        onUpdateUnitValue={onUpdateUnitValue}
-                        onUpdateDetails={onUpdateDetails}
-                        onUpdateCategories={onUpdateCategories}
-                        onUpdateImages={onUpdateImages}
-                        onUpdateVisibility={onUpdateVisibility}
-                        uspMarkups={uspMarkups}
-                        setUspMarkups={setUspMarkups}
-                        onApplyMarkups={handleApplyMarkups}
-                        roles={roles}
-                        visibleColumns={visibleTableColumns}
-                        roleKey={activePriceListRole === 'Базовый (Розничный)' ? undefined : activePriceListRole}
-                        onUpdateTierPortions={onUpdateTierPortions}
-                        onUpdateTierPriceOverrides={onUpdateTierPriceOverrides}
-                        isMasterView={false}
-                    />
+                    <ProductTable key={activePriceListRole} products={filteredTableProducts} allCategories={allCategories} onDeleteProduct={onDeleteProduct} onCycleStatus={onCycleStatus} onUpdatePortions={onUpdatePortions} onUpdatePrices={onUpdatePrices} onUpdatePriceTiers={onUpdateProductPriceTiers} onUpdateUspPrices={onUpdateUspPrices} onUpdateUspMarkupFlags={onUpdateProductUspMarkupFlags} onUpdateUnitValue={onUpdateUnitValue} onUpdateDetails={onUpdateDetails} onUpdateCategories={onUpdateCategories} onUpdateImages={onUpdateImages} onUpdateVisibility={onUpdateVisibility} uspMarkups={uspMarkups} setUspMarkups={setUspMarkups} onApplyMarkups={handleApplyMarkups} roles={roles} visibleColumns={visibleTableColumns} roleKey={activePriceListRole === 'Базовый (Розничный)' ? undefined : activePriceListRole} onUpdateTierPortions={onUpdateTierPortions} onUpdateTierPriceOverrides={onUpdateTierPriceOverrides} isMasterView={false}/>
                 </div>
             )}
 
             {activeTab === 'badges' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Управление метками товаров</h3>
-                    <p className="text-sm text-gray-600 mb-6">
-                        Создавайте метки, которые будут отображаться поверх фотографий товаров (например, "ХИТ", "NEW", "-15%").
-                    </p>
-
+                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Метки</h3>
                     <div className="bg-white border rounded-lg p-4 mb-6">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Создать новую метку</h4>
                         <form onSubmit={handleCreateBadge} className="flex flex-col gap-4">
-                            <div>
-                                <label htmlFor="badgeText" className="block text-xs font-medium text-gray-500 mb-1">Текст (макс. 5)</label>
-                                <input
-                                    type="text"
-                                    id="badgeText"
-                                    maxLength={5}
-                                    value={badgeText}
-                                    onChange={(e) => setBadgeText(e.target.value)}
-                                    placeholder="ХИТ"
-                                    className="block w-40 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-2">Цвет фона</label>
-                                <div className="flex flex-wrap gap-2 max-w-md">
-                                    {BADGE_COLORS.map((color) => (
-                                        <button
-                                            key={color}
-                                            type="button"
-                                            onClick={() => setBadgeColor(color)}
-                                            className={`w-8 h-8 rounded-full ${color} ${badgeColor === color ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' : 'hover:scale-105'} shadow-sm border border-black/10 transition-transform`}
-                                            aria-label={`Select color ${color}`}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <button
-                                    type="submit"
-                                    disabled={!badgeText}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50"
-                                >
-                                    Создать
-                                </button>
-                            </div>
+                            <div><label className="block text-xs font-medium text-gray-500 mb-1">Текст</label><input type="text" maxLength={5} value={badgeText} onChange={(e) => setBadgeText(e.target.value)} className="block w-40 px-3 py-2 border border-gray-300 rounded-md"/></div>
+                            <div><label className="block text-xs font-medium text-gray-500 mb-2">Цвет</label><div className="flex flex-wrap gap-2">{BADGE_COLORS.map((color) => (<button key={color} type="button" onClick={() => setBadgeColor(color)} className={`w-8 h-8 rounded-full ${color} ${badgeColor === color ? 'ring-2' : ''}`}/>))}</div></div>
+                            <div><button type="submit" disabled={!badgeText} className="px-4 py-2 bg-indigo-600 text-white rounded-md">Создать</button></div>
                         </form>
                     </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        {badges.map(badge => (
-                            <div key={badge.id} className="relative bg-white border rounded-lg p-4 flex flex-col items-center justify-center gap-2 group">
-                                <div className={`px-3 py-1 rounded text-white text-xs font-bold uppercase ${badge.color}`}>
-                                    {badge.text}
-                                </div>
-                                <span className="text-xs text-gray-400">{badge.color.replace('bg-', '').replace('-500', '')}</span>
-                                <button 
-                                    onClick={() => { if(window.confirm('Удалить метку?')) onDeleteBadge(badge.id) }}
-                                    className="absolute top-1 right-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <TrashIcon className="w-4 h-4" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                    {badges.length === 0 && (
-                        <p className="text-center text-gray-500 py-8">Меток пока нет.</p>
-                    )}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">{badges.map(badge => (<div key={badge.id} className="relative bg-white border rounded-lg p-4 flex flex-col items-center group"><div className={`px-3 py-1 rounded text-white text-xs font-bold uppercase ${badge.color}`}>{badge.text}</div><button onClick={() => { if(window.confirm('Удалить?')) onDeleteBadge(badge.id) }} className="absolute top-1 right-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><TrashIcon className="w-4 h-4" /></button></div>))}</div>
                 </div>
             )}
 
             {activeTab === 'wholesale_pricelist' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <h3 className="text-lg font-semibold text-gray-700 mb-4">Оптовый прайс-лист</h3>
-                     <p className="text-sm text-gray-600 pb-4">
-                        Вносите оптовые цены для разных типов покупателей. Кнопка "Сохранить" для каждой строки становится активной после внесения изменений.
-                     </p>
-                    <WholesaleProductTable
-                        products={products}
-                        onUpdatePriceTiers={onUpdateProductPriceTiers}
-                        onUpdateProductCostPrice={onUpdateProductCostPrice}
-                        onUpdateUspPrices={onUpdateUspPrices}
-                        onBulkUpdateWholesalePrices={onBulkUpdateWholesalePrices}
-                        roles={roles}
-                    />
+                    <WholesaleProductTable products={products} onUpdatePriceTiers={onUpdateProductPriceTiers} onUpdateProductCostPrice={onUpdateProductCostPrice} onUpdateUspPrices={onUpdateUspPrices} onBulkUpdateWholesalePrices={onBulkUpdateWholesalePrices} roles={roles}/>
                 </div>
             )}
 
             {activeTab === 'visibility' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Настройка видимости товаров</h3>
-                    <p className="text-sm text-gray-600 pb-4">
-                        Управляйте тем, какие товары видны для конкретных ролей покупателей.
-                    </p>
-                    <VisibilityMatrix
-                        products={products}
-                        onUpdateVisibility={onUpdateVisibility}
-                        roles={roles}
-                    />
+                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Видимость</h3>
+                    <VisibilityMatrix products={products} onUpdateVisibility={onUpdateVisibility} roles={roles}/>
                 </div>
             )}
 
             {activeTab === 'orders' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <AdminOrders
-                        orders={orders}
-                        users={allUsers}
-                        onUpdateStatus={onUpdateOrderStatus}
-                    />
+                    <AdminOrders orders={orders} users={allUsers} onUpdateStatus={onUpdateOrderStatus}/>
                 </div>
             )}
 
             {activeTab === 'customers' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <AdminCustomers
-                        shopId={shopId}
-                        users={allUsers}
-                        orders={orders}
-                        onAddUser={onAddUser}
-                        onDeleteUser={onDeleteUser}
-                        onUpdateUserByAdmin={onUpdateUserByAdmin}
-                        roles={roles}
-                        onAddRole={onAddRole}
-                        onDeleteRole={onDeleteRole}
-                    />
+                    <AdminCustomers shopId={shopId} users={allUsers} orders={orders} onAddUser={onAddUser} onDeleteUser={onDeleteUser} onUpdateUserByAdmin={onUpdateUserByAdmin} roles={roles} onAddRole={onAddRole} onDeleteRole={onDeleteRole}/>
                 </div>
             )}
 
             {activeTab === 'add' && (
                 <div className="divide-y divide-gray-200 mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="pb-8">
-                        <h3 className="text-lg font-semibold text-gray-700 mb-4 mt-6">Добавить нового товара вручную</h3>
+                        <h3 className="text-lg font-semibold text-gray-700 mb-4 mt-6">Новый товар</h3>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Название</label>
-                                <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                            </div>
-                            <div>
-                                <label htmlFor="description" className="block text-sm font-medium text-gray-700">Описание</label>
-                                <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} required rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="unit" className="block text-sm font-medium text-gray-700">Ед. изм.</label>
-                                    <select id="unit" value={unit} onChange={e => setUnit(e.target.value as ProductUnit)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        {unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="packaging" className="block text-sm font-medium text-gray-700">Вид</label>
-                                    <select id="packaging" value={packaging} onChange={e => setPackaging(e.target.value as ProductPackaging)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        {packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="pricePerUnit" className="block text-sm font-medium text-gray-700">Цена за {unitDisplayMap[unit]} (₽)</label>
-                                    <input type="number" id="pricePerUnit" value={pricePerUnit} onChange={e => setPricePerUnit(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                                </div>
-                                <div>
-                                    <label htmlFor="unitValue" className="block text-sm font-medium text-gray-700">{unitValueLabel}</label>
-                                    <input type="number" step="0.01" id="unitValue" value={unitValue} onChange={e => setUnitValue(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                                </div>
-                            </div>
-                           <div>
-                                <label className="block text-sm font-medium text-gray-700">Категории</label>
-                                <div className="mt-2 space-y-2 border p-3 rounded-md max-h-48 overflow-y-auto">
-                                    {allPossibleCategories.map(cat => (
-                                        <div key={cat} className="flex items-center">
-                                            <input 
-                                                id={`cat-add-${cat}`}
-                                                type="checkbox" 
-                                                checked={selectedCategories.has(cat)} 
-                                                onChange={() => handleCategoryToggle(cat)}
-                                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                                            />
-                                            <label htmlFor={`cat-add-${cat}`} className="ml-2 block text-sm text-gray-900">{cat}</label>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                    <input 
-                                        type="text" 
-                                        value={newCategory} 
-                                        onChange={e => setNewCategory(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNewCategory(); } }}
-                                        placeholder="Новая категория"
-                                        className="block w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
-                                    />
-                                    <button 
-                                        type="button" 
-                                        onClick={handleAddNewCategory}
-                                        className="px-3 py-2 bg-gray-200 text-sm font-medium rounded-md hover:bg-gray-300 flex-shrink-0"
-                                    >
-                                        Добавить
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Изображения</label>
-                                
-                                <div className="space-y-3">
-                                    {uploadedImages.length > 0 && (
-                                        <div className="flex space-x-2 overflow-x-auto pb-2 border p-2 rounded-md">
-                                            {uploadedImages.map((url, index) => (
-                                                <div key={index} className="relative flex-shrink-0 group">
-                                                    <img src={url} alt={`Uploaded ${index}`} className="h-20 w-20 object-cover rounded-lg border" />
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => handleDeleteUploadedImage(index)} 
-                                                        className="absolute top-1 right-1 bg-black bg-opacity-60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
-                                                    >
-                                                        <TrashIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {!isCameraActive && (
-                                        <div className="flex flex-wrap gap-2">
-                                             <input 
-                                                type="file" 
-                                                ref={imageFileInputRef} 
-                                                onChange={handleImageFileSelect} 
-                                                accept="image/*" 
-                                                multiple 
-                                                className="hidden" 
-                                             />
-                                             <button 
-                                                type="button"
-                                                onClick={handleAddImageFromFileClick}
-                                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                             >
-                                                <PlusIcon className="w-5 h-5" />
-                                                <span>Загрузить фото</span>
-                                             </button>
-                                             <button 
-                                                type="button"
-                                                onClick={handleOpenCamera}
-                                                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                                             >
-                                                <CameraIcon className="w-5 h-5" />
-                                                <span>Сделать снимок</span>
-                                             </button>
-                                        </div>
-                                    )}
-
-                                    {isCameraActive && (
-                                        <div className="flex flex-col items-center gap-2 p-2 border rounded-md bg-gray-50">
-                                            <video 
-                                                ref={videoRef} 
-                                                autoPlay 
-                                                playsInline 
-                                                muted
-                                                className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"
-                                            ></video>
-                                            <canvas ref={canvasRef} className="hidden"></canvas>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    type="button"
-                                                    onClick={handleTakePicture} 
-                                                    className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600"
-                                                >
-                                                    Снять
-                                                </button>
-                                                <button 
-                                                    type="button"
-                                                    onClick={stopCamera} 
-                                                    className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
-                                                >
-                                                    Отмена
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="mt-2">
-                                        <label htmlFor="imageUrls" className="block text-xs font-medium text-gray-500">или укажите ссылки (через запятую)</label>
-                                        <input 
-                                            type="text" 
-                                            id="imageUrls" 
-                                            value={imageUrls} 
-                                            onChange={e => setImageUrls(e.target.value)} 
-                                            placeholder="https://example.com/image.jpg"
-                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {packaging === 'головка' && (
-                                <div>
-                                    <span className="block text-sm font-medium text-gray-700">Опции продажи (для головок)</span>
-                                    <div className="mt-2 space-y-2">
-                                        <div className="flex items-center">
-                                            <input id="allowHalf" type="checkbox" checked={allowHalf} onChange={e => setAllowHalf(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/>
-                                            <label htmlFor="allowHalf" className="ml-2 block text-sm text-gray-900">Разрешить продажу половинками</label>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <input id="allowQuarter" type="checkbox" checked={allowQuarter} onChange={e => setAllowQuarter(e.target.checked)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"/>
-                                            <label htmlFor="allowQuarter" className="ml-2 block text-sm text-gray-900">Разрешить продажу четвертинками</label>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="pt-4 flex justify-end">
-                                <button type="submit" disabled={isSubmitting} className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400">
-                                    {isSubmitting ? 'Добавление...' : 'Добавить товар'}
-                                </button>
-                            </div>
+                            <div><label className="block text-sm font-medium text-gray-700">Название</label><input type="text" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div>
+                            <div><label className="block text-sm font-medium text-gray-700">Описание</label><textarea value={description} onChange={e => setDescription(e.target.value)} required rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700">Ед. изм.</label><select value={unit} onChange={e => setUnit(e.target.value as ProductUnit)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">{unitOptions.map(u => <option key={u} value={u}>{unitDisplayMap[u]}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-700">Вид</label><select value={packaging} onChange={e => setPackaging(e.target.value as ProductPackaging)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">{packagingOptions.map(p => <option key={p} value={p}>{packagingDisplayMap[p]}</option>)}</select></div></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700">Цена (₽)</label><input type="number" value={pricePerUnit} onChange={e => setPricePerUnit(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div><div><label className="block text-sm font-medium text-gray-700">Значение</label><input type="number" step="0.01" value={unitValue} onChange={e => setUnitValue(e.target.value)} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div></div>
+                            <div><label className="block text-sm font-medium text-gray-700">Категории</label><div className="mt-2 space-y-2 border p-3 rounded-md max-h-48 overflow-y-auto">{allPossibleCategories.map(cat => (<div key={cat} className="flex items-center"><input id={`cat-add-${cat}`} type="checkbox" checked={selectedCategories.has(cat)} onChange={() => handleCategoryToggle(cat)} className="h-4 w-4 text-indigo-600 border-gray-300 rounded"/><label htmlFor={`cat-add-${cat}`} className="ml-2 block text-sm text-gray-900">{cat}</label></div>))}</div><div className="mt-2 flex items-center gap-2"><input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="Новая..." className="block w-full px-4 py-2 border border-gray-300 rounded-lg"/><button type="button" onClick={handleAddNewCategory} className="px-3 py-2 bg-gray-200 text-sm rounded-md hover:bg-gray-300">Добавить</button></div></div>
+                            <div><label className="block text-sm font-medium text-gray-700 mb-2">Изображения</label><div className="space-y-3">{uploadedImages.length > 0 && (<div className="flex space-x-2 overflow-x-auto pb-2 border p-2 rounded-md">{uploadedImages.map((url, index) => (<div key={index} className="relative flex-shrink-0 group"><img src={url} alt={`Upl ${index}`} className="h-20 w-20 object-cover rounded-lg border" /><button type="button" onClick={() => handleDeleteUploadedImage(index)} className="absolute top-1 right-1 bg-black bg-opacity-60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100"><TrashIcon className="w-4 h-4" /></button></div>))}</div>)}{!isCameraActive && (<div className="flex flex-wrap gap-2"><input type="file" ref={imageFileInputRef} onChange={handleImageFileSelect} accept="image/*" multiple className="hidden" /><button type="button" onClick={handleAddImageFromFileClick} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600"><PlusIcon className="w-5 h-5" /><span>Файл</span></button><button type="button" onClick={handleOpenCamera} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gray-600 text-white rounded-md hover:bg-gray-700"><CameraIcon className="w-5 h-5" /><span>Снять</span></button></div>)}{isCameraActive && (<div className="flex flex-col items-center gap-2 p-2 border rounded-md bg-gray-50"><video ref={videoRef} autoPlay playsInline muted className="w-full max-w-sm h-48 object-cover rounded-lg bg-black"></video><canvas ref={canvasRef} className="hidden"></canvas><div className="flex gap-2"><button type="button" onClick={handleTakePicture} className="px-4 py-2 text-sm bg-green-500 text-white rounded-lg">Снять</button><button type="button" onClick={stopCamera} className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg">Отмена</button></div></div>)}<div className="mt-2"><input type="text" value={imageUrls} onChange={e => setName(e.target.value)} placeholder="https://..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm"/></div></div></div>
+                            {packaging === 'головка' && (<div><span className="block text-sm font-medium text-gray-700">Опции</span><div className="mt-2 space-y-2"><div className="flex items-center"><input id="allowHalf" type="checkbox" checked={allowHalf} onChange={e => setAllowHalf(e.target.checked)} className="h-4 w-4 text-indigo-600"/><label htmlFor="allowHalf" className="ml-2 block text-sm text-gray-900">Половинки</label></div><div className="flex items-center"><input id="allowQuarter" type="checkbox" checked={allowQuarter} onChange={e => setAllowQuarter(e.target.checked)} className="h-4 w-4 text-indigo-600"/><label htmlFor="allowQuarter" className="ml-2 block text-sm text-gray-900">Четвертинки</label></div></div></div>)}
+                            <div className="pt-4 flex justify-end"><button type="submit" disabled={isSubmitting} className="py-2 px-4 bg-indigo-600 text-white rounded-md disabled:bg-indigo-400">{isSubmitting ? '...' : 'Добавить'}</button></div>
                         </form>
                     </div>
                 </div>
             )}
             
             {activeTab === 'import' && (
-                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Массовый импорт из Excel</h3>
-                    <p className="text-sm text-gray-600 mb-4">
-                        Скачайте шаблон, заполнитe его и загрузите файл для добавления сразу нескольких товаров.
-                    </p>
-                    <div className="flex items-center gap-4">
-                         <button 
-                            onClick={handleDownloadTemplate} 
-                            className="px-4 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-md hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                          >
-                            Скачать шаблон
-                          </button>
-                         <label 
-                            htmlFor="excel-upload" 
-                            className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer'}`}
-                          >
-                            {isUploading ? 'Обработка...' : 'Загрузить файл'}
-                         </label>
-                         <input id="excel-upload" type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls, .csv" disabled={isUploading} />
-                    </div>
-                    {uploadMessage && <p className="mt-4 text-sm text-gray-700 bg-gray-100 p-3 rounded-md whitespace-pre-wrap">{uploadMessage}</p>}
-                </div>
+                 <div className="mt-2 sm:mt-6 px-1 sm:px-0"><h3 className="text-lg font-semibold text-gray-700 mb-2">Excel</h3><div className="flex items-center gap-4"><button onClick={handleDownloadTemplate} className="px-4 py-2 bg-green-100 text-green-700 rounded-md">Шаблон</button><label htmlFor="excel-upload" className={`px-4 py-2 text-white rounded-md ${isUploading ? 'bg-gray-400' : 'bg-indigo-600 cursor-pointer'}`}>{isUploading ? '...' : 'Загрузить'}</label><input id="excel-upload" type="file" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls, .csv" disabled={isUploading} /></div>{uploadMessage && <p className="mt-4 text-sm text-gray-700 bg-gray-100 p-3 rounded-md">{uploadMessage}</p>}</div>
             )}
 
             {activeTab === 'importSheets' && (
-                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-4">Импорт из Google Sheets</h3>
-                    <div className="p-4 border rounded-lg bg-gray-50 space-y-3">
-                        <div className="flex justify-between items-start gap-4">
-                            <p className="text-sm text-gray-600">
-                                <b>Как использовать:</b><br/>
-                                1. В Google Sheets: <b>Файл &gt; Поделиться &gt; Опубликовать в Интернете</b>.<br/>
-                                2. Выберите лист и формат <b>"Comma-separated values (.csv)"</b>, нажмите "Опубликовать".<br/>
-                                3. Скопируйте и вставьте полученную ссылку ниже.<br/>
-                                4. Ожидаемый порядок колонок: <b>A - Название, B - Цена за кг, C - Описание</b>. (Импортер работает только для товаров в кг).
-                            </p>
-                             <button 
-                                onClick={handleDownloadGSheetTemplate} 
-                                className="px-4 py-2 text-sm font-medium text-green-700 bg-green-100 rounded-md hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 whitespace-nowrap flex-shrink-0"
-                              >
-                                Скачать шаблон для заполнения
-                              </button>
-                        </div>
-                        <div>
-                            <label htmlFor="sheetUrl" className="block text-sm font-medium text-gray-700">URL из Google Sheets (.csv)</label>
-                            <input type="url" id="sheetUrl" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                        </div>
-                        <div className="flex items-end gap-4">
-                            <div className="flex-grow">
-                                <label htmlFor="sheetRow" className="block text-sm font-medium text-gray-700">Номер строки для импорта</label>
-                                <input type="number" id="sheetRow" value={sheetRow} onChange={e => setSheetRow(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-                            </div>
-                            <button type="button" onClick={handleGoogleSheetImport} disabled={isImporting} className="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400">
-                                {isImporting ? 'Загрузка...' : 'Загрузить данные'}
-                            </button>
-                        </div>
-                        {importError && <p className="text-red-500 text-sm mt-2">{importError}</p>}
-                    </div>
-                </div>
+                 <div className="mt-2 sm:mt-6 px-1 sm:px-0"><h3 className="text-lg font-semibold text-gray-700 mb-4">Google Sheets</h3><div className="p-4 border rounded-lg bg-gray-50 space-y-3"><div><label className="block text-sm font-medium text-gray-700">URL (.csv)</label><input type="url" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)} placeholder="https://..." className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div><div className="flex items-end gap-4"><div className="flex-grow"><label className="block text-sm font-medium text-gray-700">Строка</label><input type="number" value={sheetRow} onChange={e => setSheetRow(e.target.value)} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/></div><button type="button" onClick={handleGoogleSheetImport} disabled={isImporting} className="bg-green-600 text-white py-2 px-4 rounded-lg">{isImporting ? '...' : 'Загрузить'}</button></div>{importError && <p className="text-red-500 text-sm mt-2">{importError}</p>}</div></div>
             )}
             
             {activeTab === 'sync' && (
-                <div className="mt-2 sm:mt-6 max-w-2xl px-1 sm:px-0">
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Экспорт и Импорт данных</h3>
-                    <p className="text-sm text-gray-600 mb-6">
-                        Эта функция позволяет сохранить все данные приложения (товары, заказы, покупатели) в один файл. Этот файл можно использовать для создания резервной копии или для переноса данных на другое устройство, чтобы продолжить работу.
-                    </p>
-        
-                    <div className="space-y-6">
-                        <div className="p-4 border rounded-lg bg-gray-50">
-                            <h4 className="font-semibold text-gray-700">Экспорт данных</h4>
-                            <p className="text-sm text-gray-600 mt-1 mb-3">
-                                Сохранить все текущие данные в файл JSON.
-                            </p>
-                            <button
-                                onClick={handleExport}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                                Скачать файл с данными
-                            </button>
-                        </div>
-        
-                        <div className="p-4 border rounded-lg bg-gray-50">
-                            <h4 className="font-semibold text-gray-700">Импорт данных</h4>
-                            <p className="text-sm text-gray-600 mt-1 mb-3">
-                                <span className="font-bold text-red-600">Внимание:</span> Загрузка файла перезапишет все существующие данные в приложении. Рекомендуется сначала сделать экспорт для создания резервной копии.
-                            </p>
-                            <button
-                                onClick={handleImportClick}
-                                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                            >
-                                Загрузить файл с данными
-                            </button>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                                accept=".json,application/json"
-                                className="hidden"
-                            />
-                        </div>
-                    </div>
-                </div>
+                <div className="mt-2 sm:mt-6 max-w-2xl px-1 sm:px-0"><h3 className="text-lg font-semibold text-gray-700 mb-2">Sync</h3><div className="space-y-6"><div className="p-4 border rounded-lg bg-gray-50"><h4 className="font-semibold text-gray-700">Экспорт</h4><button onClick={handleExport} className="px-4 py-2 bg-blue-600 text-white rounded-md mt-2">Скачать JSON</button></div><div className="p-4 border rounded-lg bg-gray-50"><h4 className="font-semibold text-gray-700">Импорт</h4><button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-green-600 text-white rounded-md mt-2">Загрузить JSON</button><input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden"/></div></div></div>
             )}
         </div>
     );

@@ -74,8 +74,11 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
 
     const handleSave = () => {
         if (!isDirty) return;
+        
         onUpdatePriceTiers(product.id, editedTiers);
+        
         const mVal = markupValue === '' ? undefined : parseFloat(markupValue);
+
         wholesaleRoles.forEach(role => {
             onUpdateUspPrices(product.id, {
                 costPrice: parseFloat(localCost) || undefined,
@@ -84,10 +87,10 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
                 role: role
             });
         });
+        
         setIsDirty(false);
     };
 
-    // --- FIX: Defined handleReset to revert local state to product values and clear dirty flag ---
     const handleReset = () => {
         setEditedTiers(product.priceTiers || {});
         setLocalCost(product.costPrice?.toString() || '');
@@ -143,7 +146,7 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
                         onChange={(e) => handleMarkupChange(e.target.value)}
                         onBlur={handleMarkupBlur}
                         onKeyDown={(e) => { if(e.key === 'Enter') e.currentTarget.blur() }}
-                        className="block w-full h-8 px-2 text-sm focus:outline-none text-gray-800"
+                        className="block w-full h-8 px-1 text-xs focus:outline-none text-gray-800"
                         placeholder="0"
                     />
                 </div>
@@ -166,7 +169,6 @@ const WholesaleProductTableRow: React.FC<WholesaleProductTableRowProps> = ({ pro
                     <button onClick={handleSave} disabled={!isDirty} className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
                         Сохранить
                     </button>
-                    {/* --- FIX: Updated reset button to use handleReset --- */}
                     <button onClick={handleReset} disabled={!isDirty} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                         Сброс
                     </button>

@@ -14,7 +14,7 @@ import VisibilityMatrix from './VisibilityMatrix';
 declare var XLSX: any;
 
 // Defined in App.tsx but also valid here
-type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad';
+type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad' | 'moysklad2';
 
 interface AdminPageProps {
     shopId: string;
@@ -134,7 +134,7 @@ const RefreshIcon: React.FC<{className?: string}> = ({ className }) => (
 
 const LockClosedIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
     </svg>
 );
 
@@ -144,9 +144,11 @@ const LockOpenIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
-const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = ({ url, auth, useProxy }) => {
+// Resilient component for previewing MS images with Auth and Proxy handling
+const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean, size?: string }> = ({ url, auth, useProxy, size = "w-8 h-8" }) => {
     const [src, setSrc] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -156,18 +158,33 @@ const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = 
                 return;
             }
             try {
+                if (!auth || auth === btoa(':')) {
+                    if (isMounted) { setError('Auth?'); setLoading(false); }
+                    return;
+                }
+
+                // MoySklad image URLs can be redirects. Proxies sometimes fail on headers + redirects.
+                // We'll try fetching the blob manually.
                 const fetchUrl = useProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
+                
                 const response = await fetch(fetchUrl, {
                     headers: { 'Authorization': `Basic ${auth}` },
                     cache: 'no-store'
                 });
+
                 if (response.ok) {
                     const blob = await response.blob();
-                    const localUrl = URL.createObjectURL(blob);
-                    if (isMounted) setSrc(localUrl);
+                    if (blob.type.startsWith('image/')) {
+                        const localUrl = URL.createObjectURL(blob);
+                        if (isMounted) setSrc(localUrl);
+                    } else {
+                        if (isMounted) setError('NotImg');
+                    }
+                } else {
+                    if (isMounted) setError(response.status.toString());
                 }
             } catch (e) {
-                console.error("MsThumbnail: Failed to fetch MS image", e);
+                if (isMounted) setError('Err');
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -179,13 +196,37 @@ const MsThumbnail: React.FC<{ url: string, auth: string, useProxy: boolean }> = 
         };
     }, [url, auth, useProxy]);
 
-    if (loading) return <div className="w-6 h-6 bg-gray-100 animate-pulse rounded mx-auto"></div>;
-    if (!src) return <span className="text-gray-300">—</span>;
-    return <img src={src} alt="ms-thumb" className="w-6 h-6 rounded object-cover border mx-auto shadow-xs" />;
+    if (loading) return <div className={`${size} bg-gray-50 animate-pulse rounded border border-gray-100 flex items-center justify-center text-[8px] text-gray-300 font-bold uppercase`}>Load</div>;
+    if (error || !src) return (
+        <div className={`${size} flex flex-col items-center justify-center text-red-400 border border-red-100 rounded bg-red-50 overflow-hidden leading-none px-0.5`} title={`Ошибка загрузки: ${error || '?'}`}>
+            <span className="text-[7px] font-black uppercase">Err</span>
+            <span className="text-[9px] font-bold">{error || '!'}</span>
+        </div>
+    );
+    
+    return (
+        <a href={src} target="_blank" rel="noreferrer" className="block" onClick={e => e.stopPropagation()}>
+            <img 
+                src={src} 
+                alt="ms-img" 
+                className={`${size} rounded object-cover border border-gray-200 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-zoom-in`} 
+                onError={() => setError('LoadErr')}
+            />
+        </a>
+    );
 };
 
 const AdminPage: React.FC<AdminPageProps> = (props) => {
-    const { shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags: onUpdateProductUspMarkupFlags, onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onAddRole, onDeleteRole, onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct, onCycleBadge, onImportData } = props;
+    const { 
+        shopId, activeTab, onTabChange, products, allCategories, orders, allUsers, roles, badges, 
+        onAddProduct, onBulkAddProducts, onDeleteProduct, onCycleStatus, onUpdatePortions, 
+        onUpdatePrices, onUpdateProductPriceTiers, onUpdateProductCostPrice, onUpdateUspPrices, 
+        onBulkUpdateUspPrices, onBulkUpdateWholesalePrices, onUpdateUspMarkupFlags: onUpdateProductUspMarkupFlags, 
+        onUpdateUnitValue, onUpdateDetails, onUpdateImages, onUpdateCategories, onUpdateVisibility, 
+        onUpdateOrderStatus, onAddUser, onDeleteUser, onUpdateUserByAdmin, onAddRole, onDeleteRole, 
+        onAddBadge, onDeleteBadge, onUpdateTierPortions, onUpdateTierPriceOverrides, onUpdateProduct, 
+        onCycleBadge, onImportData 
+    } = props;
     
     // Form state
     const [name, setName] = useState('');
@@ -212,12 +253,16 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             return saved ? JSON.parse(saved) : [];
         } catch(e) { return []; }
     });
+    const [msDataV2, setMsDataV2] = useState<any[]>(() => {
+        try { const saved = localStorage.getItem(`ms_v2_${shopId}_data_cache`); return saved ? JSON.parse(saved) : []; } catch(e) { return []; }
+    });
     const [msLoading, setMsLoading] = useState(false);
     const [msError, setMsError] = useState('');
     const [msUseProxy, setMsUseProxy] = useState(() => localStorage.getItem(`ms_${shopId}_useProxy`) !== 'false');
     const [msAutoRefresh, setMsAutoRefresh] = useState(() => localStorage.getItem(`ms_${shopId}_autoRefresh`) === 'true');
-    const [msRefreshInterval, setMsRefreshInterval] = useState(() => parseInt(localStorage.getItem(`ms_${shopId}_refresh_interval`) || '5', 10));
+    const [msRefreshInterval, setMsRefreshInterval] = useState(() => parseInt(localStorage.getItem(`ms_${shopId}_refresh_interval`) || '30', 10));
     const [msIsConnected, setMsIsConnected] = useState<boolean | null>(null);
+    const [expandedMsGalleryId, setExpandedMsGalleryId] = useState<string | null>(null);
 
     // Mapping State
     const [msMapping, setMsMapping] = useState<Record<string, string>>(() => {
@@ -266,7 +311,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             weight: true,
             volume: false,
             barcodes: false,
-            images: true,
+            images: true, 
             categories: true,
         };
     });
@@ -285,9 +330,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     useEffect(() => { 
         try {
             localStorage.setItem(`ms_${shopId}_data_cache`, JSON.stringify(msData)); 
-        } catch(e) {
-            console.error("Failed to save MS data to local storage", e);
-        }
+        } catch(e) {}
     }, [msData, shopId]);
 
     const [badgeText, setBadgeText] = useState('');
@@ -418,7 +461,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const handleToggleMasterColumn = (key: string) => setVisibleMasterColumns(prev => prev.includes(key) ? (prev.length <= 1 ? prev : prev.filter(c => c !== key)) : [...prev, key]);
     const handleCreateBadge = (e: React.FormEvent) => { e.preventDefault(); if (badgeText.length > 5 || !badgeText.trim()) return; onAddBadge(badgeText.trim(), badgeColor); setBadgeText(''); };
 
-    const compressImage = (file: File): Promise<string> => {
+    const compressImage = (file: File | Blob): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.readAsDataURL(file);
@@ -476,7 +519,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     
     const handleGoogleSheetImport = async () => {
         if (!sheetUrl) { setImportError('Вставьте URL.'); return; }
-        setIsImporting(true); setImportError('');
+        setIsImporting(true) ; setImportError('');
         try {
             const csvUrl = sheetUrl.replace('/edit#gid=', '/export?format=csv&gid='), response = await fetch(csvUrl);
             if (!response.ok) throw new Error('Ошибка загрузки.');
@@ -541,26 +584,19 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
     const copyShopId = () => { navigator.clipboard.writeText(shopId); alert('Скопировано!'); }
 
-    // --- MoySklad Logic ---
+    // --- MoySklad Rebuilt Logic (Original and V2) ---
 
     const fetchAsBase64 = useCallback(async (url: string): Promise<string | null> => {
         if (!msLogin || !msPassword || !url) return null;
         const auth = btoa(`${msLogin}:${msPassword}`);
         try {
             const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(url)}` : url;
-            const response = await fetch(fetchUrl, {
-                headers: { 'Authorization': `Basic ${auth}` },
-                cache: 'no-store'
-            });
+            const response = await fetch(fetchUrl, { headers: { 'Authorization': `Basic ${auth}` }, cache: 'no-store' });
             if (!response.ok) return null;
             const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(blob);
-            });
+            return await compressImage(blob);
         } catch (e) {
-            console.error("Sync: Failed to fetch image for base64 conversion", e);
+            console.error("Sync Error", e);
             return null;
         }
     }, [msLogin, msPassword, msUseProxy]);
@@ -580,9 +616,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
 
         let processedImages: string[] = [];
         if (item.images && item.images.length > 0) {
-            const imagePromises = item.images.slice(0, 5).map((url: string) => fetchAsBase64(url).catch(() => null));
-            const base64Results = await Promise.all(imagePromises);
-            processedImages = base64Results.filter((res): res is string => res !== null);
+            for (const url of item.images.slice(0, 3)) {
+                try {
+                    const result = await fetchAsBase64(url);
+                    if (result) processedImages.push(result);
+                    await new Promise(r => setTimeout(r, 100));
+                } catch(e) {}
+            }
         }
 
         const baseProduct: any = {
@@ -619,12 +659,14 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     }, [msLockedIds, products, mapMsItemToProduct, onUpdateProduct, onBulkAddProducts]);
 
     const handleLoadMoySklad = useCallback(async (isSilent = false) => {
-        setMsError(''); if (!isSilent) { setMsLoading(true); setSelectedMsIds(new Set()); }
+        setMsError(''); 
+        if (!isSilent) { setMsLoading(true); setSelectedMsIds(new Set()); }
         if (!msLogin || !msPassword) { setMsError('Введите логин и пароль.'); setMsIsConnected(false); if (!isSilent) setMsLoading(false); return; }
         try {
             const auth = btoa(`${msLogin}:${msPassword}`);
             const limit = 500;
-            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom,productFolder,images&t=${Date.now()}`;
+            // Enhanced expand to get more image metadata (miniatures are more reliable to fetch)
+            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom,productFolder,images,images.miniature&t=${Date.now()}`;
             const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` : targetUrl;
             const response = await fetch(fetchUrl, { headers: { 'Authorization': `Basic ${auth}` }, cache: 'no-store' });
             if (!response.ok) throw new Error(response.status === 401 ? 'Ошибка авторизации' : 'Ошибка сервера');
@@ -632,7 +674,11 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             if (data && data.rows) {
                 const processed = data.rows.map((item: any) => {
                     const imageRows = item.images?.rows || [];
-                    const imageLinks = imageRows.map((img: any) => img.miniature?.href || img.tiny?.href || img.downloadHref).filter(Boolean);
+                    // Extract best available link. Miniature is often better for lists.
+                    const imageLinks = imageRows.map((img: any) => {
+                        return img.miniature?.href || img.tiny?.href || img.meta?.downloadHref;
+                    }).filter(Boolean);
+                    
                     let folderName = '-'; if (item.productFolder) { const pf = item.productFolder; folderName = pf.pathName ? `${pf.pathName}/${pf.name}` : (pf.name || '-'); }
                     return {
                         id: item.id, name: item.name, buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
@@ -643,13 +689,41 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     };
                 });
                 setMsData(processed); setMsIsConnected(true); await performAutoSync(processed);
-            } else { setMsData([]); setMsIsConnected(true); }
+            }
         } catch (error: any) { setMsError(error.message); setMsIsConnected(false); } finally { if (!isSilent) setMsLoading(false); }
     }, [msLogin, msPassword, msUseProxy, performAutoSync]);
 
+    const handleLoadMoySkladV2 = useCallback(async (isSilent = false) => {
+        setMsError(''); if (!isSilent) { setMsLoading(true); setSelectedMsIds(new Set()); }
+        if (!msLogin || !msPassword) { setMsError('Нужен логин и пароль.'); setMsIsConnected(false); if (!isSilent) setMsLoading(false); return; }
+        try {
+            const auth = btoa(`${msLogin}:${msPassword}`);
+            const limit = 500;
+            const targetUrl = `https://api.moysklad.ru/api/remap/1.2/entity/product?limit=${limit}&expand=uom,productFolder,images,images.miniature&t=${Date.now()}`;
+            const fetchUrl = msUseProxy ? `https://corsproxy.io/?${encodeURIComponent(targetUrl)}` : targetUrl;
+            const response = await fetch(fetchUrl, { headers: { 'Authorization': `Basic ${auth}` }, cache: 'no-store' });
+            if (!response.ok) throw new Error(response.status === 401 ? 'Ошибка авторизации' : 'Ошибка сервера');
+            const data = await response.json();
+            if (data && data.rows) {
+                const processed = data.rows.map((item: any) => {
+                    const imgRows = item.images?.rows || [];
+                    const imgLinks = imgRows.map((img: any) => img.miniature?.href || img.tiny?.href || img.meta?.downloadHref).filter(Boolean);
+                    let folder = '-'; if (item.productFolder) { const pf = item.productFolder; folder = pf.pathName ? `${pf.pathName}/${pf.name}` : (pf.name || '-'); }
+                    return {
+                        id: item.id, name: item.name, buyPrice: item.buyPrice ? item.buyPrice.value / 100 : 0,
+                        salePrice: (item.salePrices && item.salePrices.length > 0) ? item.salePrices[0].value / 100 : 0,
+                        article: item.article || '-', code: item.code || '-', description: item.description || '-',
+                        uom: item.uom?.name || '-', weight: item.weight || 0, categories: folder, images: imgLinks
+                    };
+                });
+                setMsDataV2(processed); setMsIsConnected(true);
+            }
+        } catch (error: any) { setMsError(error.message); setMsIsConnected(false); } finally { if (!isSilent) setMsLoading(false); }
+    }, [msLogin, msPassword, msUseProxy]);
+
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
-        if (msAutoRefresh && activeTab === 'moysklad' && msLogin && msPassword) {
+        if (msAutoRefresh && (activeTab === 'moysklad' || activeTab === 'moysklad2') && msLogin && msPassword) {
             interval = setInterval(() => { handleLoadMoySklad(true).catch(() => {}); }, msRefreshInterval * 1000);
         }
         return () => clearInterval(interval);
@@ -659,32 +733,43 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
     const handleMsToggleAll = () => setSelectedMsIds(selectedMsIds.size === msData.length ? new Set() : new Set(msData.map(item => item.id)));
     const handleMsToggleLock = (id: string) => setMsLockedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
-    const handleAddSelectedToCatalog = async () => {
+    const handleAddSelectedToCatalog = async (version: 'v1' | 'v2' = 'v1') => {
         if (selectedMsIds.size === 0) return;
         setMsLoading(true);
-        const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
+        const sourceData = version === 'v1' ? msData : msDataV2;
+        const selectedItems = sourceData.filter(item => selectedMsIds.has(item.id));
         for (const item of selectedItems) {
             try {
                 const p = await mapMsItemToProduct(item);
                 const existing = products.find(ep => ep.msId === p.msId);
-                if (existing) await onUpdateProduct(existing.id, p); else await onAddProduct(p);
-            } catch (e) {}
+                if (existing) await onUpdateProduct(existing.id, p); 
+                else await onAddProduct(p);
+            } catch (e) { console.error(`Sync Error: ${item.name}`, e); }
         }
         setMsLoading(false); setSelectedMsIds(new Set()); alert('Готово!');
     };
 
-    const handleAddAsNew = async () => {
+    const handleAddAsNew = async (version: 'v1' | 'v2' = 'v1') => {
         if (selectedMsIds.size === 0) return;
         setMsLoading(true);
-        const selectedItems = msData.filter(item => selectedMsIds.has(item.id));
+        const sourceData = version === 'v1' ? msData : msDataV2;
+        const selectedItems = sourceData.filter(item => selectedMsIds.has(item.id));
         const toAdd = [];
         for (const item of selectedItems) { try { toAdd.push(await mapMsItemToProduct(item)); } catch (e) {} }
         if (toAdd.length > 0) onBulkAddProducts(toAdd);
         setMsLoading(false); setSelectedMsIds(new Set()); alert('Добавлено!');
     }
 
+    const handleResetMsSettings = () => {
+        if (window.confirm('Сбросить настройки маппинга и видимых полей?')) {
+            localStorage.removeItem(`ms_${shopId}_fields`);
+            localStorage.removeItem(`ms_${shopId}_mapping`);
+            window.location.reload();
+        }
+    };
+
     const msSourceFields = [
-        { key: 'images', label: 'Фото' },
+        { key: 'images', label: 'Фото МС' },
         { key: 'name', label: 'Наименование' },
         { key: 'categories', label: 'Группа' },
         { key: 'buyPrice', label: 'Закупочная цена' },
@@ -718,7 +803,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
             {isIdInfoVisible && (
                 <div className="mb-2 sm:mb-6 p-2 sm:p-4 bg-indigo-50 border border-indigo-100 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
-                        <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>ID магазина</h3>
+                        <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wide flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-indigo-700" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>ID магазина</h3>
                         <p className="text-xs text-indigo-700 mt-1">Используйте этот ID для входа. <span className="font-bold text-red-600">Держите его в секрете.</span></p>
                     </div>
                     <div className="flex items-center gap-2 w-full sm:w-auto"><code className="flex-grow sm:flex-grow-0 px-3 py-2 bg-white border border-indigo-200 rounded text-sm font-mono text-gray-700 select-all">{shopId}</code><button onClick={copyShopId} className="p-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"><CopyIcon className="w-5 h-5" /></button></div>
@@ -734,6 +819,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                     <TabButton tabId="orders">Заказы</TabButton>
                     <TabButton tabId="customers">Покупатели</TabButton>
                     <TabButton tabId="moysklad">МойСклад</TabButton>
+                    <TabButton tabId="moysklad2">МойСклад 2.0</TabButton>
                     <TabButton tabId="add">Добавить</TabButton>
                     <TabButton tabId="import">Excel</TabButton>
                     <TabButton tabId="importSheets">Sheets</TabButton>
@@ -751,41 +837,45 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{msIsConnected === true ? 'Активна' : msIsConnected === false ? 'Ошибка' : 'Ожидание'}</span>
                             </div>
                         </div>
-                        <button 
-                            type="button" 
-                            onClick={() => handleLoadMoySklad(false)} 
-                            disabled={msLoading}
-                            className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"
-                        >
-                            <RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />
-                            Обновить данные
-                        </button>
+                        <div className="flex gap-2">
+                             <button onClick={handleResetMsSettings} className="bg-gray-100 text-gray-600 text-[10px] font-bold py-2 px-3 rounded-full hover:bg-gray-200 uppercase tracking-tight">Сброс настроек</button>
+                             <button 
+                                type="button" 
+                                onClick={() => handleLoadMoySklad(false)} 
+                                disabled={msLoading}
+                                className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 shadow-sm transition-all active:scale-95"
+                            >
+                                <RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />
+                                Обновить данные
+                            </button>
+                        </div>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2 text-sm">
                                 <span className="bg-blue-100 text-blue-600 p-1 rounded-full"><CloudDownloadIcon className="w-4 h-4"/></span>
-                                Подключение
+                                Подключение к API (v1.2)
                             </h4>
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Логин (Email)</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Логин (Email)</label>
                                     <input 
                                         type="text" 
                                         value={msLogin} 
                                         onChange={e => { setMsLogin(e.target.value); setMsIsConnected(null); }} 
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm" 
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
                                         placeholder="admin@example.ru"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Пароль</label>
+                                    <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider">Пароль</label>
                                     <input 
                                         type="password" 
                                         value={msPassword} 
                                         onChange={e => { setMsPassword(e.target.value); setMsIsConnected(null); }} 
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                        placeholder="••••••••"
                                     />
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
@@ -796,13 +886,13 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                         onChange={e => setMsUseProxy(e.target.checked)}
                                         className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                                     />
-                                    <label htmlFor="useProxy" className="text-xs text-gray-500">Использовать CORS-прокси</label>
+                                    <label htmlFor="useProxy" className="text-xs text-gray-500 font-medium">Использовать CORS-прокси</label>
                                 </div>
                             </div>
                         </div>
 
                         <div className="bg-white p-4 border rounded-lg shadow-sm">
-                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка синхронизации полей</h4>
+                            <h4 className="font-semibold text-gray-700 mb-3 text-sm">Настройка полей</h4>
                             <div className="space-y-1 grid grid-cols-1 gap-y-1.5">
                                 {msSourceFields.map(field => (
                                     <div key={field.key} className="flex items-center justify-between gap-4 text-xs">
@@ -813,14 +903,14 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                                 onChange={e => setMsFields(prev => ({...prev, [field.key]: e.target.checked}))}
                                                 className="h-3.5 w-3.5 text-indigo-600 border-gray-300 rounded"
                                             />
-                                            <span className="text-gray-600 truncate font-medium">{field.label}</span>
+                                            <span className="text-gray-600 truncate font-semibold">{field.label}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-gray-400">→</span>
+                                            <span className="text-[10px] text-gray-400 font-bold">→</span>
                                             <select 
                                                 value={msMapping[field.key] || ''} 
                                                 onChange={(e) => setMsMapping(prev => ({...prev, [field.key]: e.target.value}))}
-                                                className="bg-gray-50 border border-gray-200 rounded text-[10px] px-1 py-0.5 font-bold text-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                                className="bg-gray-50 border border-gray-200 rounded text-[10px] px-1.5 py-0.5 font-bold text-indigo-700 focus:outline-none"
                                             >
                                                 {targetFields.map(tf => (
                                                     <option key={tf.key} value={tf.key}>{tf.label}</option>
@@ -830,140 +920,192 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-4 pt-3 border-t">
-                                 <div className="flex items-center gap-2">
-                                    <input 
-                                        type="checkbox" 
-                                        id="msAutoRefresh" 
-                                        checked={msAutoRefresh} 
-                                        onChange={e => setMsAutoRefresh(e.target.checked)}
-                                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="msAutoRefresh" className="text-xs font-semibold text-gray-600">Авто-синхронизация</label>
-                                </div>
-                                {msAutoRefresh && (
-                                    <div className="mt-2 flex items-center gap-2">
-                                        <span className="text-[10px] text-gray-400 uppercase">Интервал:</span>
-                                        <input 
-                                            type="number" 
-                                            value={msRefreshInterval} 
-                                            onChange={e => setMsRefreshInterval(Math.max(5, parseInt(e.target.value) || 5))} 
-                                            className="w-12 px-1 border rounded text-[10px]"
-                                        />
-                                        <span className="text-[10px] text-gray-400">сек.</span>
-                                    </div>
+                        </div>
+                    </div>
+
+                    {msData.length > 0 && (
+                        <div className="bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col">
+                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
+                                <span className="font-bold text-gray-700 text-sm">Товаров: {msData.length}</span>
+                                {selectedMsIds.size > 0 && (
+                                    <button 
+                                        onClick={() => handleAddSelectedToCatalog('v1')} 
+                                        className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm hover:bg-indigo-700"
+                                    >
+                                        Синхронизировать ({selectedMsIds.size})
+                                    </button>
                                 )}
+                            </div>
+                            <div className="overflow-x-auto max-h-[700px]">
+                                <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
+                                    <thead className="text-[9px] text-gray-600 uppercase bg-gray-100 sticky top-0 z-10 border-b">
+                                        <tr>
+                                            <th className="px-2 py-3 w-8 border-r text-center">
+                                                <input type="checkbox" checked={msData.length > 0 && selectedMsIds.size === msData.length} onChange={handleMsToggleAll} className="h-3 w-3" />
+                                            </th>
+                                            <th className="px-2 py-3 w-8 border-r text-center"><LockClosedIcon className="w-3 h-3 mx-auto" /></th>
+                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(field => (
+                                                <th key={field.key} className={`px-2 py-3 border-r font-bold truncate ${field.key === 'images' ? 'w-20' : ''}`}>{field.label}</th>
+                                            ))}
+                                            <th className="px-2 py-3 w-20 font-bold text-center">Статус</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y">
+                                        {msData.map((item) => {
+                                            const authStr = btoa(`${msLogin}:${msPassword}`);
+                                            return (
+                                                <React.Fragment key={item.id}>
+                                                    <tr className={`hover:bg-gray-50 transition-colors ${expandedMsGalleryId === item.id ? 'bg-indigo-50/30' : ''}`}>
+                                                        <td className="px-2 py-2 border-r text-center"><input type="checkbox" checked={selectedMsIds.has(item.id)} onChange={() => handleMsToggleRow(item.id)} className="h-3 w-3" /></td>
+                                                        <td className="px-2 py-2 border-r text-center">
+                                                            <button onClick={() => handleMsToggleLock(item.id)} className={`p-1 rounded-full ${msLockedIds.has(item.id) ? 'bg-indigo-600 text-white' : 'text-gray-300'}`}>
+                                                                {msLockedIds.has(item.id) ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}
+                                                            </button>
+                                                        </td>
+                                                        {msFields.images && (
+                                                            <td className="px-2 py-2 border-r text-center">
+                                                                <div className="flex items-center justify-center gap-1.5">
+                                                                    {item.images && item.images.length > 0 ? (
+                                                                        <MsThumbnail url={item.images[0]} auth={authStr} useProxy={msUseProxy} size="w-6 h-6" />
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-gray-300 font-bold">0</span>
+                                                                    )}
+                                                                    <button 
+                                                                        onClick={() => setExpandedMsGalleryId(expandedMsGalleryId === item.id ? null : item.id)}
+                                                                        className={`text-[9px] font-black px-1 py-0.5 rounded border transition-all ${item.images && item.images.length > 0 ? 'text-indigo-600 border-indigo-100 bg-indigo-50/50 hover:bg-indigo-100 hover:border-indigo-200' : 'text-gray-200 border-transparent bg-transparent cursor-default'}`}
+                                                                    >
+                                                                        {item.images?.length || ''}
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        )}
+                                                        {msFields.name && <td className="px-2 py-2 border-r truncate font-bold text-gray-700">{item.name}</td>}
+                                                        {msFields.categories && <td className="px-2 py-2 border-r truncate text-[10px] text-gray-400">{item.categories}</td>}
+                                                        {msFields.buyPrice && <td className="px-2 py-2 border-r font-mono text-indigo-600">{item.buyPrice} ₽</td>}
+                                                        {msFields.salePrice && <td className="px-2 py-2 border-r font-mono font-black text-gray-900">{item.salePrice} ₽</td>}
+                                                        {msFields.article && <td className="px-2 py-2 border-r text-gray-400">{item.article}</td>}
+                                                        {msFields.code && <td className="px-2 py-2 border-r text-gray-400">{item.code}</td>}
+                                                        {msFields.description && <td className="px-2 py-2 border-r truncate max-w-[150px]">{item.description}</td>}
+                                                        {msFields.uom && <td className="px-2 py-2 border-r text-center">{item.uom}</td>}
+                                                        {msFields.weight && <td className="px-2 py-2 border-r text-center font-mono">{item.weight}</td>}
+                                                        <td className="px-2 py-2 text-center">
+                                                            {products.some(p => p.msId === item.id) ? <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">Связан</span> : <span className="bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase">Новый</span>}
+                                                        </td>
+                                                    </tr>
+                                                    {expandedMsGalleryId === item.id && item.images && item.images.length > 0 && (
+                                                        <tr className="bg-indigo-50/20">
+                                                            <td colSpan={100} className="p-4 border-b">
+                                                                <div className="flex flex-wrap items-center gap-4">
+                                                                    <div className="flex-shrink-0 text-[10px] font-bold text-indigo-400 uppercase tracking-widest px-2 py-1 border-r border-indigo-100 mr-2">Галерея МС:</div>
+                                                                    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-indigo-200 pr-10">
+                                                                        {item.images.map((imgUrl: string, idx: number) => (
+                                                                            <div key={idx} className="flex flex-col items-center gap-1.5">
+                                                                                <MsThumbnail 
+                                                                                    url={imgUrl} 
+                                                                                    auth={authStr} 
+                                                                                    useProxy={msUseProxy} 
+                                                                                    size="w-32 h-32"
+                                                                                />
+                                                                                <span className="text-[8px] font-mono text-gray-400">#{idx+1}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'moysklad2' && (
+                <div className="mt-2 sm:mt-6 px-1 sm:px-0 animate-in fade-in duration-300">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-bold text-gray-700">Интеграция v2.0 (Умный импорт фото)</h3>
+                            <div className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${msIsConnected === true ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                                {msIsConnected === true ? 'Connect' : 'Pending'}
+                            </div>
+                        </div>
+                        <button onClick={() => handleLoadMoySkladV2(false)} disabled={msLoading} className="bg-indigo-600 text-white text-xs font-bold py-2 px-4 rounded-full shadow-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2">
+                            <RefreshIcon className={`w-3.5 h-3.5 ${msLoading ? 'animate-spin' : ''}`} />
+                            Обновить данные
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div className="p-4 border rounded-xl bg-gray-50/50 space-y-3">
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">🔑 Доступ</h4>
+                            <div className="grid grid-cols-1 gap-2">
+                                <input type="text" value={msLogin} onChange={e => setMsLogin(e.target.value)} placeholder="Email" className="w-full px-3 py-1.5 border rounded-lg text-sm" />
+                                <input type="password" value={msPassword} onChange={e => setMsPassword(e.target.value)} placeholder="Пароль" className="w-full px-3 py-1.5 border rounded-lg text-sm" />
+                                <label className="flex items-center gap-2 cursor-pointer pt-1"><input type="checkbox" checked={msUseProxy} onChange={e => setMsUseProxy(e.target.checked)} className="h-4 w-4 text-indigo-600 rounded" /><span className="text-[11px] text-gray-500 font-bold uppercase">Использовать Proxy</span></label>
+                            </div>
+                        </div>
+                        <div className="p-4 border rounded-xl bg-gray-50/50 space-y-2">
+                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">⚙️ Маппинг</h4>
+                            <div className="max-h-[120px] overflow-y-auto space-y-1 pr-2">
+                                {Object.keys(msFields).map(f => (
+                                    <div key={f} className="flex items-center justify-between text-[11px]">
+                                        <div className="flex items-center gap-2"><input type="checkbox" checked={(msFields as any)[f]} onChange={e => setMsFields(prev => ({...prev, [f]: e.target.checked}))} className="h-3 w-3" /><span className="font-bold text-gray-600">{f}</span></div>
+                                        <select value={msMapping[f] || ''} onChange={e => setMsMapping(prev => ({...prev, [f]: e.target.value}))} className="bg-transparent font-black text-indigo-600 focus:outline-none">
+                                            <option value="">Off</option>
+                                            <option value="name">Name</option>
+                                            <option value="description">Desc</option>
+                                            <option value="pricePerUnit">Price</option>
+                                            <option value="costPrice">Cost</option>
+                                            <option value="unitValue">Weight</option>
+                                            <option value="categories">Folder</option>
+                                        </select>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
 
-                    {msError && (
-                        <div className="p-4 mb-4 bg-red-50 text-red-700 rounded-md text-sm border border-red-200">
-                            <b>Ошибка подключения:</b> {msError}
-                        </div>
-                    )}
-
-                    {msData.length > 0 && (
-                        <div className="bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col">
-                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center flex-wrap gap-2">
-                                <div className="flex items-center gap-3">
-                                    <span className="font-semibold text-gray-700 text-sm">Найдено товаров: {msData.length}</span>
-                                    <div className="flex items-center gap-2 text-[10px]">
-                                        <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                                        <span className="text-gray-500">Замочек = авто-обновление</span>
-                                    </div>
-                                </div>
+                    {msDataV2.length > 0 && (
+                        <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+                            <div className="p-3 bg-gray-50 border-b flex justify-between items-center">
+                                <div className="text-[11px] font-black text-gray-400 uppercase">Найдено: {msDataV2.length}</div>
                                 {selectedMsIds.size > 0 && (
-                                    <div className="flex items-center gap-2">
-                                        <button 
-                                            onClick={handleAddSelectedToCatalog} 
-                                            disabled={msLoading}
-                                            className="bg-indigo-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm hover:bg-indigo-700 disabled:opacity-50 transition-all active:scale-95"
-                                        >
-                                            Синхронизировать выбранные ({selectedMsIds.size})
-                                        </button>
-                                        <button 
-                                            onClick={handleAddAsNew} 
-                                            disabled={msLoading}
-                                            className="bg-green-600 text-white text-[10px] font-bold py-1.5 px-3 rounded shadow-sm hover:bg-green-700 disabled:opacity-50 transition-all active:scale-95"
-                                        >
-                                            Добавить как новые
-                                        </button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleAddSelectedToCatalog('v2')} disabled={msLoading} className="px-3 py-1 bg-indigo-600 text-white text-[10px] font-black uppercase rounded shadow-sm hover:scale-105 transition-transform">Синхронизировать ({selectedMsIds.size})</button>
                                     </div>
                                 )}
                             </div>
-                            <div className="overflow-x-auto max-h-[600px]">
-                                <table className="min-w-full text-[11px] text-left text-gray-500 table-fixed border-collapse">
-                                    <thead className="text-[10px] text-gray-700 uppercase bg-gray-100 sticky top-0 z-10 border-b">
+                            <div className="overflow-x-auto max-h-[500px]">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="sticky top-0 bg-white border-b z-10 text-[9px] uppercase font-black text-gray-400">
                                         <tr>
-                                            <th className="px-2 py-3 w-8 border-r text-center">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={msData.length > 0 && selectedMsIds.size === msData.length} 
-                                                    onChange={handleMsToggleAll}
-                                                    className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
-                                                />
-                                            </th>
-                                            <th className="px-2 py-3 w-8 border-r text-center" title="Авто-синхронизация при обновлении данных MS">
-                                                <LockClosedIcon className="w-3 h-3 mx-auto text-indigo-400" />
-                                            </th>
-                                            {msSourceFields.filter(f => msFields[f.key as keyof typeof msFields]).map(field => (
-                                                <th key={field.key} className="px-2 py-3 border-r font-bold truncate">
-                                                    {field.label}
-                                                </th>
-                                            ))}
-                                            <th className="px-2 py-3 w-20 font-bold">Связь</th>
+                                            <th className="p-3 w-10"><input type="checkbox" checked={selectedMsIds.size === msDataV2.length} onChange={() => setSelectedMsIds(selectedMsIds.size === msDataV2.length ? new Set() : new Set(msDataV2.map(i => i.id)))} /></th>
+                                            <th className="p-3 w-12">Photo</th>
+                                            <th className="p-3">Name</th>
+                                            <th className="p-3">Folder</th>
+                                            <th className="p-3">Price</th>
+                                            <th className="p-3">Cost</th>
+                                            <th className="p-3">Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="bg-white">
-                                        {msData.map((item) => {
-                                            const isLocked = msLockedIds.has(item.id);
-                                            const linkedProduct = products.find(p => p.msId === item.id);
+                                    <tbody className="divide-y divide-gray-50">
+                                        {msDataV2.map(item => {
+                                            const isLinked = products.some(p => p.msId === item.id);
                                             const authStr = btoa(`${msLogin}:${msPassword}`);
-                                            
                                             return (
-                                                <tr key={item.id} className={`border-b hover:bg-gray-50 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/30' : ''}`}>
-                                                    <td className="px-2 py-2 border-r text-center">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={selectedMsIds.has(item.id)} 
-                                                            onChange={() => handleMsToggleRow(item.id)}
-                                                            className="h-3 w-3 text-indigo-600 border-gray-300 rounded"
-                                                        />
-                                                    </td>
-                                                    <td className="px-2 py-2 border-r text-center">
-                                                        <button 
-                                                            onClick={() => handleMsToggleLock(item.id)}
-                                                            className={`p-1 rounded-full transition-colors ${isLocked ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-300 hover:text-gray-400'}`}
-                                                            title={isLocked ? "Авто-обновление включено" : "Включить авто-обновление"}
-                                                        >
-                                                            {isLocked ? <LockClosedIcon className="w-3.5 h-3.5" /> : <LockOpenIcon className="w-3.5 h-3.5" />}
-                                                        </button>
-                                                    </td>
-                                                    {msFields.images && (
-                                                        <td className="px-2 py-2 border-r text-center">
-                                                            {item.images && item.images.length > 0 ? (
-                                                                <MsThumbnail url={item.images[0]} auth={authStr} useProxy={msUseProxy} />
-                                                            ) : '—'}
-                                                        </td>
-                                                    )}
-                                                    {msFields.name && <td className="px-2 py-2 border-r truncate font-medium text-gray-700">{item.name}</td>}
-                                                    {msFields.categories && <td className="px-2 py-2 border-r truncate">{item.categories}</td>}
-                                                    {msFields.buyPrice && <td className="px-2 py-2 border-r font-mono text-indigo-600">{item.buyPrice} ₽</td>}
-                                                    {msFields.salePrice && <td className="px-2 py-2 border-r font-mono font-bold text-gray-800">{item.salePrice} ₽</td>}
-                                                    {msFields.article && <td className="px-2 py-2 border-r text-gray-400">{item.article}</td>}
-                                                    {msFields.code && <td className="px-2 py-2 border-r text-gray-400">{item.code}</td>}
-                                                    {msFields.description && <td className="px-2 py-2 border-r truncate max-w-[150px]">{item.description}</td>}
-                                                    {msFields.uom && <td className="px-2 py-2 border-r text-center">{item.uom}</td>}
-                                                    {msFields.weight && <td className="px-2 py-2 border-r text-center">{item.weight}</td>}
-                                                    
-                                                    <td className="px-2 py-2 text-center">
-                                                        {linkedProduct ? (
-                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-green-100 text-green-700 uppercase tracking-tight">Связан</span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 text-gray-400 uppercase tracking-tight">Нет</span>
-                                                        )}
-                                                    </td>
+                                                <tr key={item.id} className={`hover:bg-indigo-50/30 transition-colors ${selectedMsIds.has(item.id) ? 'bg-indigo-50/50' : ''}`}>
+                                                    <td className="p-3"><input type="checkbox" checked={selectedMsIds.has(item.id)} onChange={() => setSelectedMsIds(prev => { const n = new Set(prev); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; })} /></td>
+                                                    <td className="p-3"><MsThumbnail url={item.images[0]} auth={authStr} useProxy={msUseProxy} /></td>
+                                                    <td className="p-3 text-xs font-bold text-gray-700">{item.name}</td>
+                                                    <td className="p-3 text-[10px] text-gray-400 font-medium">{item.categories}</td>
+                                                    <td className="p-3 text-xs font-black text-gray-900">{item.salePrice} ₽</td>
+                                                    <td className="p-3 text-xs font-bold text-indigo-600">{item.buyPrice} ₽</td>
+                                                    <td className="p-3"><span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${isLinked ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>{isLinked ? 'Linked' : 'New'}</span></td>
                                                 </tr>
                                             );
                                         })}
@@ -975,7 +1117,7 @@ const AdminPage: React.FC<AdminPageProps> = (props) => {
                 </div>
             )}
             
-            {/* Остальные вкладки админки ( pricelist, products_master и т.д. ) */}
+            {/* Остальные вкладки админки без изменений */}
             {activeTab === 'pricelist' && (
                 <div className="mt-2 sm:mt-6 px-1 sm:px-0">
                     <div className="flex items-center gap-2 mb-4">

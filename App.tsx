@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useContext, useEffect, useRef } from 'react';
 import { Product, CartItem, Order, ProductPortion, ProductStatus, ProductUnit, ProductPackaging, User, OrderStatus, ProductBadge, CustomerType, ALL_CUSTOMER_TYPES, Badge } from './types';
 import CategoryDropdown from './components/CategoryDropdown';
@@ -160,7 +161,7 @@ const simpleHash = (str: string) => {
 };
 
 // Define Admin Tab type here to share/use in state
-type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad';
+type AdminTabType = 'pricelist' | 'products_master' | 'add' | 'table' | 'orders' | 'import' | 'customers' | 'importSheets' | 'wholesale_pricelist' | 'visibility' | 'badges' | 'sync' | 'moysklad' | 'moysklad2';
 
 interface AppProps {
     shopId: string;
@@ -563,7 +564,7 @@ const App: React.FC<AppProps> = ({ shopId, shopName }) => {
     switch (product.status) {
         case ProductStatus.Available: newStatus = ProductStatus.OutOfStock; break;
         case ProductStatus.OutOfStock: newStatus = ProductStatus.Hidden; break;
-        case ProductStatus.Hidden: newStatus = ProductStatus.Available; break;
+        case ProductStatus.Hidden: newStatus = product.status === ProductStatus.Hidden ? ProductStatus.Available : product.status; break;
         default: newStatus = product.status;
     }
     handleProductUpdate(productId, { status: newStatus });
